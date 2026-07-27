@@ -1,0 +1,1 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>cn.ai.live</groupId><artifactId>ai-live-edge-agent</artifactId><version>0.1.0-SNAPSHOT</version><properties><java.version>17</java.version></properties></project>

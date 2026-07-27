@@ -1,0 +1,21 @@
+# Build output
+target/
+build/
+
+# IDE and local history
+.idea/
+.vscode/
+*.iml
+.history/
+
+# Runtime files and local configuration
+logs/
+*.log
+application-local.yml
+application-local.yaml
+.env.local
+.env.development
+.env.production
+
+# OS files
+.DS_Store
