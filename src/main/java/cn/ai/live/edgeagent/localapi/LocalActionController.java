@@ -4,12 +4,10 @@ import cn.ai.live.edgeagent.action.ActionCommand;
 import cn.ai.live.edgeagent.action.ActionDispatcher;
 import cn.ai.live.edgeagent.action.ActionExecutionResult;
 import cn.ai.live.edgeagent.assets.AssetService;
-import cn.ai.live.edgeagent.audio.MicrophoneCaptureService;
-import cn.ai.live.edgeagent.command.CommandConfig;
-import cn.ai.live.edgeagent.command.CommandConfigLoader;
+import cn.ai.live.edgeagent.command.CommandConfigManager;
 import cn.ai.live.edgeagent.command.CommandDefinition;
-import cn.ai.live.edgeagent.config.AiLiveProperties;
-import cn.ai.live.edgeagent.renderer.RendererWebSocketGateway;
+import cn.ai.live.edgeagent.runtime.ActionSource;
+import cn.ai.live.edgeagent.runtime.RuntimeStatusService;
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,37 +22,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/local-api")
 @ConditionalOnProperty(prefix = "ai-live.local-api", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class LocalActionController {
-    private final CommandConfigLoader commandConfigLoader;
+    private final CommandConfigManager commandConfigManager;
     private final ActionDispatcher actionDispatcher;
-    private final AiLiveProperties properties;
-    private final MicrophoneCaptureService microphoneCaptureService;
-    private final RendererWebSocketGateway rendererGateway;
-    private final AssetService assetService;
+    private final RuntimeStatusService runtimeStatusService;
 
-    public LocalActionController(CommandConfigLoader commandConfigLoader,
+    public LocalActionController(CommandConfigManager commandConfigManager,
                                  ActionDispatcher actionDispatcher,
-                                 AiLiveProperties properties,
-                                 MicrophoneCaptureService microphoneCaptureService,
-                                 RendererWebSocketGateway rendererGateway,
-                                 AssetService assetService) {
-        this.commandConfigLoader = commandConfigLoader;
+                                 RuntimeStatusService runtimeStatusService) {
+        this.commandConfigManager = commandConfigManager;
         this.actionDispatcher = actionDispatcher;
-        this.properties = properties;
-        this.microphoneCaptureService = microphoneCaptureService;
-        this.rendererGateway = rendererGateway;
-        this.assetService = assetService;
+        this.runtimeStatusService = runtimeStatusService;
     }
 
     @PostMapping("/actions/test")
     public ResponseEntity<Map<String, Object>> test(@RequestBody TestActionRequest request) {
-        CommandDefinition command = commandConfigLoader.currentConfig().getCommands().stream()
+        CommandDefinition command = commandConfigManager.currentConfig().getCommands().stream()
                 .filter(item -> item.getCode().equals(request.actionCode()))
                 .findFirst()
                 .orElse(null);
         if (command == null) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "error", "unknown actionCode"));
         }
-        ActionExecutionResult result = actionDispatcher.dispatch(ActionCommand.from(command));
+        ActionExecutionResult result = actionDispatcher.dispatch(ActionCommand.from(command), ActionSource.LOCAL_TEST);
         return ResponseEntity.ok(Map.of("success", result.accepted(), "reason", result.reason()));
     }
 
@@ -66,20 +55,11 @@ public class LocalActionController {
 
     @GetMapping("/actions")
     public List<CommandDefinition> actions() {
-        return commandConfigLoader.currentConfig().getCommands();
+        return commandConfigManager.currentConfig().getCommands();
     }
 
     @GetMapping("/health")
     public Map<String, Object> health() {
-        CommandConfig config = commandConfigLoader.currentConfig();
-        return Map.of(
-                "status", "UP",
-                "asrAutoStart", properties.getAsr().isAutoStart(),
-                "microphoneRunning", microphoneCaptureService.isRunning(),
-                "rendererConnections", rendererGateway.connectionCount(),
-                "commandCount", config.getCommands().size(),
-                "assetRoot", assetService.rootPath().toString(),
-                "assetRootExists", assetService.rootExists()
-        );
+        return Map.of("status", "UP", "runtime", runtimeStatusService.snapshot());
     }
 }

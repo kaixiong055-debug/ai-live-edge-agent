@@ -1,69 +1,88 @@
 {
-  "wakeWords": ["小助手", "小先锋"],
+  "wakeWords": ["小助手", "小先锋", "小伴"],
   "commands": [
     {
       "code": "heart",
       "name": "比心",
       "keywords": ["比心", "比个心", "给大家比心", "来一个比心"],
-      "cooldownMs": 3000,
-      "priority": 100,
-      "enabled": true,
+      "target": "MEDIA",
       "actionType": "SHOW_IMAGE",
-      "assetPath": "heart.png",
+      "assetPath": "111.jpg",
       "durationMs": 5000,
       "loop": false,
-      "transition": "FADE"
+      "transition": "FADE",
+      "cooldownMs": 3000,
+      "priority": 100,
+      "enabled": true
     },
     {
       "code": "welcome",
       "name": "欢迎",
       "keywords": ["欢迎大家", "欢迎新朋友", "跟大家打个招呼"],
-      "cooldownMs": 3000,
-      "priority": 90,
-      "enabled": true,
+      "target": "MEDIA",
       "actionType": "PLAY_GIF",
       "assetPath": "welcome.gif",
       "durationMs": 5000,
       "loop": false,
-      "transition": "FADE"
+      "transition": "FADE",
+      "cooldownMs": 3000,
+      "priority": 90,
+      "enabled": true
     },
     {
       "code": "flower",
       "name": "撒花",
       "keywords": ["撒花", "庆祝一下"],
-      "cooldownMs": 3000,
-      "priority": 80,
-      "enabled": true,
+      "target": "MEDIA",
       "actionType": "SHOW_IMAGE",
       "assetPath": "flower.png",
       "durationMs": 5000,
       "loop": false,
-      "transition": "FADE"
+      "transition": "FADE",
+      "cooldownMs": 3000,
+      "priority": 80,
+      "enabled": true
     },
     {
       "code": "wave",
       "name": "挥手",
       "keywords": ["挥手", "挥个手", "招招手"],
-      "cooldownMs": 3000,
-      "priority": 70,
-      "enabled": true,
+      "target": "MEDIA",
       "actionType": "PLAY_WEBM",
       "assetPath": "wave.webm",
       "durationMs": 5000,
       "loop": false,
-      "transition": "FADE"
+      "transition": "FADE",
+      "cooldownMs": 3000,
+      "priority": 70,
+      "enabled": true
     },
     {
       "code": "idle",
       "name": "待机",
       "keywords": ["休息一下", "恢复待机", "回到原位"],
-      "cooldownMs": 3000,
-      "priority": 60,
-      "enabled": true,
+      "target": "MEDIA",
       "actionType": "HIDE",
       "durationMs": 0,
       "loop": false,
-      "transition": "FADE"
+      "transition": "FADE",
+      "cooldownMs": 3000,
+      "priority": 60,
+      "enabled": true
+    },
+    {
+      "code": "vts_wave",
+      "name": "Live2D 挥手",
+      "keywords": ["模型挥手", "小伴挥手"],
+      "target": "VTUBE_STUDIO",
+      "actionType": "TRIGGER_HOTKEY",
+      "parameters": {
+        "hotkeyId": "",
+        "hotkeyName": "挥手动作"
+      },
+      "cooldownMs": 3000,
+      "priority": 70,
+      "enabled": false
     }
   ]
 }

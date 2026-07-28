@@ -62,6 +62,7 @@ public class AssetService {
             case PLAY_GIF -> "gif".equals(extension);
             case PLAY_WEBM -> "webm".equals(extension);
             case HIDE, CLEAR -> true;
+            case TRIGGER_HOTKEY -> false;
         };
     }
 

@@ -3,19 +3,81 @@ server:
   port: 18081
 
 ai-live:
+  audio:
+    device-name: ""
+    auto-scan-interval-ms: 5000
+  console:
+    enabled: true
+    refresh-interval-ms: 3000
   asr:
+    enabled: true
+    provider: TENCENT
     auto-start: true
+    auto-connect: false
     microphone-name: ""
     engine-model-type: "16k_zh"
     audio-frame-millis: 40
     reconnect-delays: 1s,3s,5s
+    sherpa:
+      enabled: false
+      model-root: data/models/sherpa-onnx/streaming-paraformer-zh-en
+      native-root: runtime/native/windows-x86_64
+      jar-path: runtime/native/windows-x86_64/sherpa-onnx-v1.12.10.jar
+      encoder: encoder.int8.onnx
+      decoder: decoder.int8.onnx
+      tokens: tokens.txt
+      num-threads: 2
+      sample-rate: 16000
+      feature-dim: 80
+      decoding-method: greedy_search
+      enable-endpoint: true
+      rule1-min-trailing-silence: 2.4
+      rule2-min-trailing-silence: 1.2
+      rule3-min-utterance-length: 20
+      max-active-paths: 4
+      debug: false
+      kws-enabled: false
+      queue-capacity: 50
+    tencent:
+      enabled: true
+    funasr:
+      enabled: false
   command:
-    config-path: "classpath:commands.json"
+    config-path: "commands.json"
+    watch-enabled: true
+    reload-debounce-ms: 500
+    wake-word-mode: OPTIONAL
+    wake-words:
+      - 小伴
+      - 小助手
   renderer:
     enabled: true
     default-width: 1920
     default-height: 1080
   assets:
     root-path: data/assets
+    max-upload-size: 200MB
   local-api:
     enabled: true
+  tencent-cloud:
+    app-id: ${TENCENT_ASR_APP_ID}
+    secret-id: ${TENCENT_ASR_SECRET_ID}
+    secret-key: ${TENCENT_ASR_SECRET_KEY}
+  integrations:
+    vtube-studio:
+      enabled: false
+      host: 127.0.0.1
+      port: 8001
+      api-version: "1.0"
+      plugin-name: "AI Live Edge Agent"
+      plugin-developer: "AI Live"
+      connect-on-startup: true
+      request-timeout-ms: 5000
+      reconnect:
+        enabled: true
+        initial-delay-ms: 1000
+        max-delay-ms: 30000
+        multiplier: 2.0
+  runtime:
+    action-history-size: 100
+    error-history-size: 50

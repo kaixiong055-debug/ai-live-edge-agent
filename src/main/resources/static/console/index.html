@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Live Edge Console</title>
+  <link rel="stylesheet" href="/console/console.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>AI Live Edge Console</h1>
+      <p id="lastRefresh">等待刷新</p>
+    </div>
+    <button id="refreshBtn">刷新</button>
+  </header>
+  <main class="grid">
+    <section class="panel"><h2>服务概览</h2><div id="overview" class="kv"></div></section>
+    <section class="panel wide"><h2>ASR 与麦克风</h2><div id="asrMic" class="kv"></div><div class="row"><button id="asrConnectBtn">连接 ASR</button><button id="asrDisconnectBtn" class="secondary">断开 ASR</button><button id="audioTestBtn">测试麦克风</button></div><p id="audioTestHint"></p></section>
+    <section class="panel"><h2>本地离线识别</h2><div id="localAsr" class="kv"></div></section>
+    <section class="panel wide"><h2>动作适配器</h2><div id="adapters" class="kv"></div><div class="row"><button id="vtsConnectBtn">连接 VTube Studio</button><button id="vtsDisconnectBtn" class="secondary">断开</button><button id="vtsAuthorizeBtn">授权 VTube Studio</button><button id="vtsRefreshBtn" class="secondary">刷新模型和 Hotkey</button></div><p class="muted">首次授权：打开 VTube Studio，在设置中开启 Allow Plugin API access，点击授权后在 VTube Studio 弹窗中选择 Allow。</p></section>
+    <section class="panel"><h2>Renderer</h2><div id="renderer" class="kv"></div></section>
+    <section class="panel"><h2>当前动作</h2><div id="currentAction" class="kv"></div></section>
+    <section class="panel wide"><h2>VTube Studio Hotkey</h2><div id="hotkeys" class="table"></div></section>
+    <section class="panel wide"><h2>最近动作</h2><div id="recentActions" class="table"></div></section>
+    <section class="panel wide"><h2>最近错误</h2><div id="recentErrors" class="table"></div></section>
+    <section class="panel wide"><h2>素材管理</h2><div class="row"><input id="assetFile" type="file"><button id="uploadBtn">上传</button></div><div id="assets" class="table"></div></section>
+    <section class="panel wide"><h2>命令配置</h2><div class="row"><button id="reloadCommandsBtn">重新加载 commands.json</button></div><div id="commands" class="table"></div></section>
+    <section class="panel"><h2>快速测试</h2><div class="row"><button id="clearBtn">清空 Renderer</button></div><p id="quickHint"></p></section>
+  </main>
+  <script src="/console/console.js"></script>
+</body>
+</html>

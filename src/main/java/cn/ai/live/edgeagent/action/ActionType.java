@@ -5,5 +5,6 @@ public enum ActionType {
     PLAY_GIF,
     PLAY_WEBM,
     HIDE,
-    CLEAR
+    CLEAR,
+    TRIGGER_HOTKEY
 }

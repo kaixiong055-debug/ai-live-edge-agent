@@ -16,8 +16,12 @@ application-local.yaml
 .env.local
 .env.development
 .env.production
+/commands.json
 data/assets/*
 !data/assets/.gitkeep
+data/tokens/
+data/models/
+runtime/
 .mvn/wrapper/apache-maven-*/
 .mvn/wrapper/apache-maven-*-bin.zip
 ai-live-controller/

@@ -2,14 +2,13 @@ package cn.ai.live.edgeagent.bootstrap;
 
 import cn.ai.live.edgeagent.action.ActionCommand;
 import cn.ai.live.edgeagent.action.ActionDispatcher;
-import cn.ai.live.edgeagent.asr.SpeechRecognitionProvider;
+import cn.ai.live.edgeagent.asr.AsrSessionCoordinator;
+import cn.ai.live.edgeagent.asr.SpeechRecognitionGateway;
 import cn.ai.live.edgeagent.audio.AudioDeviceService;
-import cn.ai.live.edgeagent.audio.MicrophoneCaptureService;
-import cn.ai.live.edgeagent.command.CommandConfig;
-import cn.ai.live.edgeagent.command.CommandConfigLoader;
+import cn.ai.live.edgeagent.command.CommandConfigManager;
 import cn.ai.live.edgeagent.command.CommandMatchResult;
 import cn.ai.live.edgeagent.command.CommandMatcher;
-import cn.ai.live.edgeagent.config.AiLiveProperties;
+import cn.ai.live.edgeagent.runtime.ActionSource;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -21,43 +20,36 @@ import org.springframework.stereotype.Component;
 @Component
 public class VoiceControllerRunner implements ApplicationRunner {
     private final AudioDeviceService audioDeviceService;
-    private final MicrophoneCaptureService microphoneCaptureService;
-    private final SpeechRecognitionProvider recognitionProvider;
-    private final CommandConfigLoader commandConfigLoader;
+    private final SpeechRecognitionGateway recognitionProvider;
+    private final CommandConfigManager commandConfigManager;
     private final CommandMatcher commandMatcher;
     private final ActionDispatcher actionDispatcher;
-    private final AiLiveProperties properties;
+    private final AsrSessionCoordinator asrSessionCoordinator;
 
-    public VoiceControllerRunner(AudioDeviceService audioDeviceService, MicrophoneCaptureService microphoneCaptureService,
-                                 SpeechRecognitionProvider recognitionProvider, CommandConfigLoader commandConfigLoader,
-                                 CommandMatcher commandMatcher, ActionDispatcher actionDispatcher, AiLiveProperties properties) {
+    public VoiceControllerRunner(AudioDeviceService audioDeviceService,
+                                 SpeechRecognitionGateway recognitionProvider, CommandConfigManager commandConfigManager,
+                                 CommandMatcher commandMatcher, ActionDispatcher actionDispatcher,
+                                 AsrSessionCoordinator asrSessionCoordinator) {
         this.audioDeviceService = audioDeviceService;
-        this.microphoneCaptureService = microphoneCaptureService;
         this.recognitionProvider = recognitionProvider;
-        this.commandConfigLoader = commandConfigLoader;
+        this.commandConfigManager = commandConfigManager;
         this.commandMatcher = commandMatcher;
         this.actionDispatcher = actionDispatcher;
-        this.properties = properties;
+        this.asrSessionCoordinator = asrSessionCoordinator;
     }
 
     @Override
-    public void run(ApplicationArguments args) throws Exception {
+    public void run(ApplicationArguments args) {
         printMicrophones();
-        CommandConfig commandConfig = commandConfigLoader.load();
         recognitionProvider.addListener(result -> {
-            CommandMatchResult matchResult = commandMatcher.match(result, commandConfig);
+            CommandMatchResult matchResult = commandMatcher.match(result, commandConfigManager.currentConfig());
             if (matchResult.matched()) {
-                actionDispatcher.dispatch(ActionCommand.from(matchResult.command()));
+                actionDispatcher.dispatch(ActionCommand.from(matchResult.command()), ActionSource.ASR);
             }
         });
-        if (!properties.getAsr().isAutoStart()) {
-            log.info("已关闭自动监听: ai-live.asr.auto-start=false");
-            return;
-        }
-        recognitionProvider.start();
-        microphoneCaptureService.start(properties.getAsr().getMicrophoneName(),
-                properties.getAsr().getAudioFrameMillis(),
-                recognitionProvider::sendAudio);
+
+        // 根据 auto-connect 配置自动连接或等待手动连接
+        asrSessionCoordinator.onBoot();
     }
 
     private void printMicrophones() {
@@ -70,7 +62,6 @@ public class VoiceControllerRunner implements ApplicationRunner {
 
     @PreDestroy
     public void shutdown() {
-        microphoneCaptureService.stop();
-        recognitionProvider.stop();
+        asrSessionCoordinator.shutdown();
     }
 }

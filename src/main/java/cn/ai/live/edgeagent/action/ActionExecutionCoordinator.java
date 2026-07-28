@@ -39,7 +39,7 @@ public class ActionExecutionCoordinator {
             return ActionExecutionResult.rejected("lower-priority");
         }
         cancelTimeout();
-        currentAction = new ActiveAction(command.actionCode(), command.priority(), clock.millis(), command.durationMs());
+        currentAction = new ActiveAction(command.actionCode(), command.assetPath(), command.priority(), clock.millis(), command.durationMs());
         if (command.durationMs() > 0) {
             clearFuture = scheduler.schedule(() -> {
                 synchronized (ActionExecutionCoordinator.this) {
@@ -64,6 +64,6 @@ public class ActionExecutionCoordinator {
         }
     }
 
-    public record ActiveAction(String actionCode, int priority, long startedAt, long durationMs) {
+    public record ActiveAction(String actionCode, String assetPath, int priority, long startedAt, long durationMs) {
     }
 }

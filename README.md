@@ -1,34 +1,62 @@
 # AI Live Edge Agent
 
-Windows 本地 Edge Agent，运行在主播电脑上。V0.2 实现本地闭环：
-
-麦克风 -> 腾讯云实时 ASR -> 口令匹配 -> 动作派发 -> WebSocket -> 本地 Renderer -> PNG/JPG/GIF/WebP/WebM 展示。
-
-本项目不包含云端后台、Vue 管理端、抖音数据、AI 对话、OBS WebSocket 控制、授权、支付或自动更新。
-
-## 项目路径
-
 正式维护路径：
 
 ```text
 D:\git-ai-live\ai-live-edge-agent
 ```
 
-旧的 `ai-live-controller` 仅作为第一阶段来源，不再作为正式 Agent 继续开发。
+当前默认模式是腾讯云实时 ASR。Sherpa-ONNX 本地离线识别保留为可选模式，FunASR 只保留配置和枚举，后续版本再实现。
 
-## 架构
+## 当前能力
 
-```text
-AudioDeviceService / MicrophoneCaptureService
-  -> SpeechRecognitionProvider
-  -> CommandMatcher
-  -> ActionDispatcher
-  -> ActionExecutor
-  -> RendererWebSocketGateway
-  -> /renderer/index.html
+- Windows 麦克风自动选择、采集和重试。
+- 48k/44.1k/32k 等输入格式统一转换为 `16000Hz / 16bit / mono / little-endian PCM`。
+- 默认走腾讯云实时语音识别，临时结果显示在 Console，最终结果进入 `CommandMatcher`。
+- `commands.json` 热加载、冷却、防抖、优先级。
+- 本地 Renderer、WebSocket、素材管理、运行状态 Console。
+- 可选 Sherpa-ONNX 本地离线 Provider 和 WAV 文件测试接口。
+
+## 默认 ASR 配置
+
+```yaml
+ai-live:
+  asr:
+    enabled: true
+    provider: TENCENT
+    auto-start: true
+    engine-model-type: "16k_zh"
+    tencent:
+      enabled: true
+    sherpa:
+      enabled: false
 ```
 
-动作执行规则集中在 `ActionExecutionCoordinator`。
+腾讯云参数保持：
+
+- `engineModelType=16k_zh`
+- `voiceFormat=1`
+- `result_mod=0`
+- `needvad=1`
+- `vad_silence_time=1000`
+
+SDK v1.0.68 兼容处理仍使用：
+
+```java
+setExtraParam("result_mod", "0")
+```
+
+## 腾讯云凭据
+
+不要把真实凭据写进项目文件。运行前用环境变量提供：
+
+```powershell
+$env:TENCENT_ASR_APP_ID="你的 AppId"
+$env:TENCENT_ASR_SECRET_ID="你的 SecretId"
+$env:TENCENT_ASR_SECRET_KEY="你的 SecretKey"
+```
+
+缺少环境变量时 Spring Boot 仍会启动，`asrStatus=MISCONFIGURED`，Console 会显示缺少的变量名称，并且不会无限重连。
 
 ## 启动
 
@@ -37,171 +65,187 @@ cd D:\git-ai-live\ai-live-edge-agent
 .\mvnw.cmd spring-boot:run
 ```
 
-默认监听：
+Console：
 
 ```text
-http://127.0.0.1:18081
+http://127.0.0.1:18081/console/index.html
 ```
 
-默认不会监听 `0.0.0.0`。
-
-关闭麦克风和 ASR 自动启动：
-
-```powershell
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--ai-live.asr.auto-start=false"
-```
-
-## 腾讯云 ASR
-
-先在腾讯云控制台开通语音识别 ASR，并创建 API 密钥。真实凭据只能放环境变量，不要写入代码、配置、README 或测试。
-
-PowerShell 临时设置：
-
-```powershell
-$env:TENCENT_ASR_APP_ID="你的AppId"
-$env:TENCENT_ASR_SECRET_ID="你的SecretId"
-$env:TENCENT_ASR_SECRET_KEY="你的SecretKey"
-```
-
-## 麦克风选择
-
-启动时会列出支持 16k PCM 的麦克风。默认使用系统默认麦克风。
-
-指定设备名称关键字：
-
-```yaml
-ai-live:
-  asr:
-    microphone-name: "麦克风名称的一部分"
-```
-
-## Renderer
-
-页面地址：
+Renderer：
 
 ```text
 http://127.0.0.1:18081/renderer/index.html
 ```
 
-WebSocket：
+## 麦克风
 
-```text
-ws://127.0.0.1:18081/ws/renderer
-```
+普通用户不需要填写麦克风名称。`ai-live.audio.device-name` 默认为空，Agent 会自动优先选择真实麦克风设备，例如名称包含 `麦克风`、`Microphone`、`Mic` 的输入设备。
 
-URL 参数：
-
-```text
-http://127.0.0.1:18081/renderer/index.html?width=1920&height=1080&status=1
-```
-
-背景默认透明。`status=1` 时显示连接状态；不传时状态信息默认隐藏。
-
-## OBS 浏览器源
-
-1. 添加“浏览器源”。
-2. URL 填写 `http://127.0.0.1:18081/renderer/index.html`。
-3. 宽高推荐 `1920 x 1080`。
-4. FPS 建议 30，动效较多时可用 60。
-5. 启用透明背景，避免给浏览器源设置不透明背景色。
-
-## 素材目录
-
-默认目录：
-
-```text
-D:\git-ai-live\ai-live-edge-agent\data\assets
-```
-
-配置：
+高级用户可以指定设备名称关键字：
 
 ```yaml
 ai-live:
-  assets:
-    root-path: data/assets
+  audio:
+    device-name: "Realtek"
 ```
 
-示例：
+没有麦克风、设备占用或读取失败时，Console、Renderer、WebSocket、素材管理和测试动作仍可使用。
 
-```text
-data/assets/
-  heart.png
-  welcome.gif
-  wave.webm
-  default.png
+## Sherpa-ONNX 可选离线模式
+
+切换到本地离线 ASR：
+
+```yaml
+ai-live:
+  asr:
+    provider: SHERPA_ONNX
+    sherpa:
+      enabled: true
+    tencent:
+      enabled: false
 ```
 
-动作配置只能引用素材根目录下文件。程序会拒绝 `../` 路径穿越和不支持的格式，不会把本地绝对路径发送给浏览器。
+准备依赖：
 
-## commands.json
-
-兼容旧格式：
-
-```json
-{
-  "code": "heart",
-  "name": "比心",
-  "keywords": ["比心"],
-  "cooldownMs": 3000,
-  "priority": 100,
-  "enabled": true
-}
+```powershell
+cd D:\git-ai-live\ai-live-edge-agent
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-sherpa-onnx.ps1
 ```
 
-新格式：
+固定版本：
 
-```json
-{
-  "actionCode": "heart",
-  "actionName": "比心",
-  "keywords": ["比心"],
-  "cooldownMs": 3000,
-  "priority": 100,
-  "enabled": true,
-  "actionType": "SHOW_IMAGE",
-  "assetPath": "heart.png",
-  "durationMs": 5000,
-  "loop": false,
-  "transition": "FADE"
-}
-```
+- Sherpa-ONNX Java API JAR：`sherpa-onnx-v1.12.10.jar`
+- Windows x64 native-lib JAR：`sherpa-onnx-native-lib-win-x64-v1.12.10.jar`
+- 模型：`csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en`
 
-动作类型：
-
-- `SHOW_IMAGE`
-- `PLAY_GIF`
-- `PLAY_WEBM`
-- `HIDE`
-- `CLEAR`
+默认腾讯云模式下不会加载 Sherpa JNI，不校验 Sherpa 模型，不启动 Sherpa 解码线程。
 
 ## 本地测试接口
 
-仅允许本机访问，可通过 `ai-live.local-api.enabled=false` 关闭。
+麦克风 5 秒测试：
 
 ```powershell
-Invoke-RestMethod -Method Get  http://127.0.0.1:18081/local-api/health
-Invoke-RestMethod -Method Get  http://127.0.0.1:18081/local-api/actions
-Invoke-RestMethod -Method Post http://127.0.0.1:18081/local-api/actions/test -ContentType "application/json" -Body '{"actionCode":"heart"}'
-Invoke-RestMethod -Method Post http://127.0.0.1:18081/local-api/actions/clear
+Invoke-RestMethod -Method Post http://127.0.0.1:18081/local-api/audio/test
 ```
 
-## 测试与打包
+Sherpa WAV 文件识别测试仅在 `provider=SHERPA_ONNX` 且模型就绪时使用：
+
+```powershell
+curl.exe -F "file=@D:\test.wav" http://127.0.0.1:18081/local-api/asr/test/file
+```
+
+WAV 测试不进入 `CommandMatcher`，不触发 Renderer，不保存音频文件。
+
+## 构建和验证
+
+```powershell
+cd D:\git-ai-live\ai-live-edge-agent
+.\mvnw.cmd test
+.\mvnw.cmd package
+```
+
+## 当前边界
+
+当前阶段不实现 FunASR 服务器连接、云端注册、心跳、素材下发、抖音数据接入、AI 对话、OBS WebSocket、支付、授权、自动更新或 Electron 客户端。
+
+本项目不会保存用户录音，不上传用户音频，不在配置或日志中输出腾讯云密钥。
+# AI Live Edge Agent
+
+正式项目路径：
+
+```powershell
+D:\git-ai-live\ai-live-edge-agent
+```
+
+当前版本：`0.5.0-A-SNAPSHOT`
+
+## 当前默认模式
+
+默认使用腾讯云实时 ASR：
+
+```yaml
+ai-live.asr.provider: TENCENT
+ai-live.asr.tencent.enabled: true
+ai-live.asr.sherpa.enabled: false
+```
+
+腾讯云凭据只通过环境变量提供：
+
+```powershell
+setx TENCENT_ASR_APP_ID "你的 AppId"
+setx TENCENT_ASR_SECRET_ID "你的 SecretId"
+setx TENCENT_ASR_SECRET_KEY "你的 SecretKey"
+```
+
+项目文件不包含真实凭据。缺少环境变量时，Spring Boot 仍会启动，ASR 状态为 `MISCONFIGURED`，不会无限重连。
+
+## 动作适配器
+
+V0.5-A 引入可插拔动作适配器：
+
+```text
+CommandMatcher
+-> ActionDispatcher
+-> ActionExecutorRegistry
+   -> MEDIA
+   -> VTUBE_STUDIO
+```
+
+当前实现：
+
+- `MEDIA`：`SHOW_IMAGE`、`PLAY_GIF`、`PLAY_WEBM`、`HIDE`、`CLEAR`
+- `VTUBE_STUDIO`：`TRIGGER_HOTKEY`
+
+旧 `commands.json` 没有 `target` 时默认走 `MEDIA`。Renderer 未连接时，MEDIA 返回 `TARGET_UNAVAILABLE / RENDERER_NOT_CONNECTED`，不会伪装成执行成功。
+
+详细架构见 [docs/action-adapter-architecture.md](docs/action-adapter-architecture.md)。
+
+## VTube Studio
+
+默认连接：
+
+```text
+ws://127.0.0.1:8001
+```
+
+V0.5-A 只允许连接 loopback 地址：`127.0.0.1`、`localhost`、`::1`。
+
+首次使用步骤：
+
+1. 启动 VTube Studio。
+2. 加载一个 Live2D 模型。
+3. 在 VTube Studio 设置中开启 `Allow Plugin API access`。
+4. 打开 Console：`http://127.0.0.1:18081/console/index.html`。
+5. 点击“连接 VTube Studio”。
+6. 点击“授权 VTube Studio”。
+7. 在 VTube Studio 弹窗中点击 `Allow`。
+8. 授权成功后 Console 会显示模型和 Hotkey 列表。
+
+Token 保存在本地运行数据目录 `data/tokens/`，该目录已加入 `.gitignore`。Token 不写入 `application.yml`，不输出到日志，不通过 Runtime API 或 Console API 返回。
+
+## 启动
+
+```powershell
+cd D:\git-ai-live\ai-live-edge-agent
+.\mvnw.cmd spring-boot:run
+```
+
+或：
+
+```powershell
+.\mvnw.cmd package
+java -jar target\ai-live-edge-agent-0.5.0-A-SNAPSHOT.jar
+```
+
+## 测试
 
 ```powershell
 .\mvnw.cmd test
 .\mvnw.cmd package
 ```
 
-## 常见问题
+## 当前边界
 
-- 麦克风打不开：检查 Windows 隐私权限、设备是否被其他软件占用、`microphone-name` 是否匹配。
-- 腾讯云连接失败：检查三个环境变量、ASR 服务是否开通、网络是否可访问腾讯云。
-- Renderer 连接不上：确认服务已启动，端口为 `18081`，页面地址是 `127.0.0.1`。
-- OBS 不显示透明背景：检查浏览器源是否启用透明背景，Renderer 页面本身是透明的。
-- WebM 不播放：确认文件扩展名为 `.webm`，编码可被浏览器支持，视频默认静音自动播放。
-- 素材路径错误：只填写相对 `data/assets` 的路径，不要写绝对路径或 `../`。
-- 端口被占用：修改 `server.port`，或关闭占用 `18081` 的进程。
-
-## V0.2 边界
-
-已实现本地 Renderer 和动作可视化闭环。仍不实现 OBS 控制、抖音直播数据、AI 对话、云端素材同步、授权和支付。
+- Sherpa-ONNX 保留为可选离线模式。
+- FunASR 保持关闭和 `UNAVAILABLE`，不实现服务器连接。
+- 本阶段不实现 Warudo、OBS、HTTP/Webhook、Composite、腾讯云热词、安装包、云端授权或支付。

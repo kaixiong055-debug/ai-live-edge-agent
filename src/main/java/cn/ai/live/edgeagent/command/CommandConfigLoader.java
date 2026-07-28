@@ -1,6 +1,7 @@
 package cn.ai.live.edgeagent.command;
 
 import cn.ai.live.edgeagent.action.ActionType;
+import cn.ai.live.edgeagent.action.ActionTargets;
 import cn.ai.live.edgeagent.config.AiLiveProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
@@ -58,6 +59,7 @@ public class CommandConfigLoader {
             if (command.getActionType() == null) {
                 command.setActionType(ActionType.SHOW_IMAGE);
             }
+            command.setTarget(ActionTargets.normalizeOrDefault(command.getTarget()));
             if (command.getPriority() == 0) {
                 command.setPriority(0);
             }
@@ -65,5 +67,6 @@ public class CommandConfigLoader {
                 throw new IllegalArgumentException("命令 " + command.getCode() + " 字段 cooldownMs 不能小于 0");
             }
         }
+        new CommandConfigValidator().validate(config);
     }
 }
