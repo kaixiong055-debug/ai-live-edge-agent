@@ -1,0 +1,69 @@
+{
+  "wakeWords": ["小助手", "小先锋"],
+  "commands": [
+    {
+      "code": "heart",
+      "name": "比心",
+      "keywords": ["比心", "比个心", "给大家比心", "来一个比心"],
+      "cooldownMs": 3000,
+      "priority": 100,
+      "enabled": true,
+      "actionType": "SHOW_IMAGE",
+      "assetPath": "heart.png",
+      "durationMs": 5000,
+      "loop": false,
+      "transition": "FADE"
+    },
+    {
+      "code": "welcome",
+      "name": "欢迎",
+      "keywords": ["欢迎大家", "欢迎新朋友", "跟大家打个招呼"],
+      "cooldownMs": 3000,
+      "priority": 90,
+      "enabled": true,
+      "actionType": "PLAY_GIF",
+      "assetPath": "welcome.gif",
+      "durationMs": 5000,
+      "loop": false,
+      "transition": "FADE"
+    },
+    {
+      "code": "flower",
+      "name": "撒花",
+      "keywords": ["撒花", "庆祝一下"],
+      "cooldownMs": 3000,
+      "priority": 80,
+      "enabled": true,
+      "actionType": "SHOW_IMAGE",
+      "assetPath": "flower.png",
+      "durationMs": 5000,
+      "loop": false,
+      "transition": "FADE"
+    },
+    {
+      "code": "wave",
+      "name": "挥手",
+      "keywords": ["挥手", "挥个手", "招招手"],
+      "cooldownMs": 3000,
+      "priority": 70,
+      "enabled": true,
+      "actionType": "PLAY_WEBM",
+      "assetPath": "wave.webm",
+      "durationMs": 5000,
+      "loop": false,
+      "transition": "FADE"
+    },
+    {
+      "code": "idle",
+      "name": "待机",
+      "keywords": ["休息一下", "恢复待机", "回到原位"],
+      "cooldownMs": 3000,
+      "priority": 60,
+      "enabled": true,
+      "actionType": "HIDE",
+      "durationMs": 0,
+      "loop": false,
+      "transition": "FADE"
+    }
+  ]
+}

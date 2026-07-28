@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Live Renderer</title>
+  <link rel="stylesheet" href="/renderer/renderer.css">
+</head>
+<body>
+  <main id="stage" aria-label="renderer stage">
+    <div id="status" class="status hidden">disconnected</div>
+    <img id="imageLayer" class="media hidden" alt="">
+    <video id="videoLayer" class="media hidden" muted playsinline></video>
+  </main>
+  <script src="/renderer/renderer.js"></script>
+</body>
+</html>

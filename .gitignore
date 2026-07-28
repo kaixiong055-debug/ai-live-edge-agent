@@ -16,6 +16,11 @@ application-local.yaml
 .env.local
 .env.development
 .env.production
+data/assets/*
+!data/assets/.gitkeep
+.mvn/wrapper/apache-maven-*/
+.mvn/wrapper/apache-maven-*-bin.zip
+ai-live-controller/
 
 # OS files
 .DS_Store

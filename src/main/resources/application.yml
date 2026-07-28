@@ -1,0 +1,21 @@
+server:
+  address: 127.0.0.1
+  port: 18081
+
+ai-live:
+  asr:
+    auto-start: true
+    microphone-name: ""
+    engine-model-type: "16k_zh"
+    audio-frame-millis: 40
+    reconnect-delays: 1s,3s,5s
+  command:
+    config-path: "classpath:commands.json"
+  renderer:
+    enabled: true
+    default-width: 1920
+    default-height: 1080
+  assets:
+    root-path: data/assets
+  local-api:
+    enabled: true
