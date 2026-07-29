@@ -2,6 +2,7 @@ package cn.ai.live.edgeagent.command;
 
 import cn.ai.live.edgeagent.action.ActionType;
 import cn.ai.live.edgeagent.action.ActionTargets;
+import cn.ai.live.edgeagent.config.AiLivePathResolver;
 import cn.ai.live.edgeagent.config.AiLiveProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
@@ -16,12 +17,15 @@ import org.springframework.stereotype.Component;
 public class CommandConfigLoader {
     private final ObjectMapper objectMapper;
     private final AiLiveProperties properties;
+    private final AiLivePathResolver pathResolver;
     private final DefaultResourceLoader resourceLoader = new DefaultResourceLoader();
     private volatile CommandConfig currentConfig = new CommandConfig();
 
-    public CommandConfigLoader(ObjectMapper objectMapper, AiLiveProperties properties) {
+    public CommandConfigLoader(ObjectMapper objectMapper, AiLiveProperties properties,
+                               AiLivePathResolver pathResolver) {
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.pathResolver = pathResolver;
     }
 
     public CommandConfig load() {
@@ -45,7 +49,7 @@ public class CommandConfigLoader {
         if (path.startsWith("classpath:")) {
             return resourceLoader.getResource(path).getInputStream();
         }
-        return Files.newInputStream(Path.of(path));
+        return Files.newInputStream(pathResolver.resolve(path));
     }
 
     private void validateAndDefault(CommandConfig config) {

@@ -1,0 +1,73 @@
+<Window x:Class="AiLiveEdge.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="AI Live Edge"
+        Width="1280" Height="820"
+        MinWidth="1000" MinHeight="650"
+        WindowStartupLocation="CenterScreen"
+        Background="#090B12"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        Closed="Window_Closed">
+  <Grid Background="#090B12">
+    <TextBlock x:Name="ConnectionText" Visibility="Collapsed" />
+
+    <wv2:WebView2 x:Name="RendererWebView"
+                  Width="1" Height="1"
+                  HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                  IsHitTestVisible="False" Focusable="False" />
+
+    <wv2:WebView2 x:Name="ConsoleWebView" Visibility="Collapsed" />
+
+    <Grid x:Name="StatusOverlay" Background="#090B12">
+      <Ellipse Width="560" Height="560" HorizontalAlignment="Center" VerticalAlignment="Center"
+               Fill="#201747" Opacity="0.32">
+        <Ellipse.Effect>
+          <BlurEffect Radius="100" />
+        </Ellipse.Effect>
+      </Ellipse>
+
+      <Border Width="560" MaxHeight="440" Padding="42" CornerRadius="24"
+              Background="#F2141824" BorderBrush="#18FFFFFF" BorderThickness="1"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border.Effect>
+          <DropShadowEffect BlurRadius="36" ShadowDepth="8" Color="#000000" Opacity="0.38" />
+        </Border.Effect>
+        <StackPanel>
+          <Border Width="64" Height="64" CornerRadius="19" HorizontalAlignment="Center"
+                  Background="#7658F4">
+            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Foreground="White" FontSize="20" FontWeight="Bold" Text="AI" />
+          </Border>
+          <TextBlock Margin="0,18,0,0" FontSize="27" FontWeight="Bold" Foreground="#F7F7FC"
+                     HorizontalAlignment="Center" Text="AI Live Edge" />
+          <TextBlock Margin="0,5,0,0" FontSize="11" Foreground="#7F879A"
+                     HorizontalAlignment="Center" Text="AI 直播伴播桌面助手" />
+          <TextBlock x:Name="StatusTitle" Margin="0,25,0,0" FontSize="17"
+                     FontWeight="SemiBold" Foreground="#E7E8F0"
+                     HorizontalAlignment="Center" Text="正在准备伴播环境" />
+          <TextBlock x:Name="StatusMessage" Margin="0,10,0,0" FontSize="12"
+                     Foreground="#8E96AA" TextAlignment="Center" TextWrapping="Wrap"
+                     Text="正在连接本地 AI 服务，请稍候。" />
+          <ProgressBar x:Name="StartupProgress" Height="4" Margin="28,25,28,0"
+                       IsIndeterminate="True" Foreground="#8063FF" Background="#202536" />
+          <Border x:Name="RuntimeHintPanel" Visibility="Collapsed" Margin="0,20,0,0"
+                  Padding="14" CornerRadius="10" Background="#19F59E42">
+            <TextBlock Foreground="#F3B869" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="未检测到 Microsoft Edge WebView2 Runtime。请安装 WebView2 Runtime 后重试。" />
+          </Border>
+          <StackPanel x:Name="ErrorButtons" Visibility="Collapsed" Margin="0,24,0,0"
+                      Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button MinWidth="92" Height="36" Margin="4" Padding="14,0" Click="Retry_Click"
+                    Background="#7658F4" Foreground="White">重试</Button>
+            <Button MinWidth="112" Height="36" Margin="4" Padding="14,0" Click="OpenLogs_Click"
+                    Background="#252A39" Foreground="#E4E6EF">打开日志</Button>
+            <Button MinWidth="120" Height="36" Margin="4" Padding="14,0" Click="RestartAgent_Click"
+                    Background="#252A39" Foreground="#E4E6EF">重启服务</Button>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

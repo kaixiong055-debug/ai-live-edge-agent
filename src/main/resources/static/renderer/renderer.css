@@ -7,6 +7,11 @@ body {
   background: transparent;
 }
 
+body.live-output,
+body.live-output #stage {
+  background: var(--renderer-background, #00FF00);
+}
+
 #stage {
   position: relative;
   width: 1920px;

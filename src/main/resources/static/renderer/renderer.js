@@ -3,6 +3,9 @@
   const width = Number(params.get("width") || "1920");
   const height = Number(params.get("height") || "1080");
   const showStatus = params.get("status") === "1";
+  const clientType = params.get("clientType")
+    || (params.get("client") === "live-output" ? "LIVE_OUTPUT_WINDOW" : "DESKTOP_HIDDEN");
+  const background = params.get("background") || "#00FF00";
   const stage = document.getElementById("stage");
   const status = document.getElementById("status");
   const imageLayer = document.getElementById("imageLayer");
@@ -12,6 +15,10 @@
 
   stage.style.width = width + "px";
   stage.style.height = height + "px";
+  if (clientType === "LIVE_OUTPUT_WINDOW") {
+    document.body.classList.add("live-output");
+    document.documentElement.style.setProperty("--renderer-background", background);
+  }
   if (showStatus) {
     document.body.classList.add("show-status");
     status.classList.remove("hidden");
@@ -24,7 +31,10 @@
   function connect() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     socket = new WebSocket(protocol + "//" + window.location.host + "/ws/renderer");
-    socket.onopen = function () { setStatus("connected"); };
+    socket.onopen = function () {
+      setStatus("connected");
+      reportClient();
+    };
     socket.onclose = function () {
       setStatus("disconnected");
       window.setTimeout(connect, 1000);
@@ -40,6 +50,18 @@
         clearRenderer();
       }
     };
+  }
+
+  function reportClient() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({
+      type: "RENDERER_CLIENT_INFO",
+      clientType: clientType,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      canvasWidth: width,
+      canvasHeight: height
+    }));
   }
 
   function renderAction(data) {
@@ -82,4 +104,5 @@
   }
 
   connect();
+  window.addEventListener("resize", reportClient);
 })();

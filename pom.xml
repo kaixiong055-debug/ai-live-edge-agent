@@ -58,6 +58,7 @@
     </dependencies>
 
     <build>
+        <finalName>ai-live-edge-agent</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

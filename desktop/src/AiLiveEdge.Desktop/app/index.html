@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AI Live Edge</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div><strong>AI Live Edge</strong><small>AI 直播伴播助手</small></div>
+      </div>
+
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-item active" data-page="home"><i>⌂</i><span>首页</span></button>
+        <button class="nav-item" data-page="assistant"><i>◉</i><span>AI 伴播</span><b id="liveNavDot"></b></button>
+        <button class="nav-item" data-page="actions"><i>✦</i><span>动作库</span></button>
+        <button class="nav-item" data-page="assets"><i>▧</i><span>素材中心</span></button>
+        <button class="nav-item" data-page="live-output"><i>▣</i><span>直播输出</span></button>
+        <button class="nav-item" data-page="settings"><i>⚙</i><span>设置</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="service-health"><span class="pulse-dot"></span><div><strong>本地服务</strong><small id="sidebarStatus">正在连接</small></div></div>
+        <span class="version" id="appVersion">Desktop</span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow" id="pageEyebrow">OVERVIEW</p>
+          <h1 id="pageTitle">首页</h1>
+        </div>
+        <div class="header-actions">
+          <span class="mode-label">运行模式</span>
+          <div class="mode-switch" aria-label="运行模式">
+            <button id="headerLocalMode" class="active" data-switch-mode="LOCAL">本地模式</button>
+            <button id="headerCloudMode" data-switch-mode="CLOUD">云端模式</button>
+          </div>
+          <div class="identity">
+            <div class="avatar">AI</div>
+            <div><strong>本地用户</strong><small id="authStatus">授权状态检查中</small></div>
+          </div>
+        </div>
+      </header>
+
+      <div class="offline-banner" id="offlineBanner">
+        <span>!</span><div><strong>正在连接本地服务</strong><small>AI Live Edge 会自动重试，请稍候。</small></div>
+      </div>
+
+      <section class="page active" id="page-home">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="status-pill"><i class="pulse-dot"></i><span id="heroStatus">正在准备伴播环境</span></span>
+            <h2>让每一次直播，<br><em>都有人替你接住节奏。</em></h2>
+            <p>语音识别、智能响应和直播动作已整合在一个简单的工作台中。</p>
+            <div class="hero-actions">
+              <button class="button primary large" id="heroStart"><span>▶</span>开始伴播</button>
+              <button class="button ghost large" data-page-link="assistant">查看伴播状态</button>
+            </div>
+          </div>
+          <div class="orb-stage" aria-hidden="true">
+            <div class="orb-ring ring-one"></div><div class="orb-ring ring-two"></div>
+            <div class="ai-orb"><span></span><span></span><span></span></div>
+            <div class="floating-chip chip-one">语音已就绪</div>
+            <div class="floating-chip chip-two">动作引擎在线</div>
+          </div>
+        </div>
+
+        <div class="section-heading"><div><p>实时状态</p><h3>一切是否准备就绪</h3></div><span id="lastUpdated">等待首次同步</span></div>
+        <div class="status-grid">
+          <article class="status-card">
+            <div class="icon-box violet">✦</div><div><small>AI 状态</small><strong id="aiStatus">等待指令</strong><p id="aiSubstatus">随时准备响应</p></div><span class="card-state good"></span>
+          </article>
+          <article class="status-card">
+            <div class="icon-box cyan">⌁</div><div><small>麦克风</small><strong id="micStatus">正在检查</strong><p id="micDevice">自动选择设备</p></div><span class="card-state" id="micState"></span>
+          </article>
+          <article class="status-card">
+            <div class="icon-box pink">▶</div><div><small>动作引擎</small><strong id="engineStatus">正在连接 Renderer</strong><p id="engineDetail">正在准备动作服务</p></div><span class="card-state busy" id="engineState"></span>
+          </article>
+        </div>
+
+        <article class="panel renderer-status-panel">
+          <div class="renderer-heading">
+            <div class="renderer-title"><div class="icon-box pink">▶</div><div><p>动作引擎</p><h3>Renderer</h3></div></div>
+            <span class="renderer-badge connecting" id="rendererBadge">正在连接</span>
+          </div>
+          <div class="renderer-metrics">
+            <div><small>状态</small><strong id="rendererConnection">正在检查</strong></div>
+            <div><small>WebSocket</small><strong id="rendererWebSocket">等待连接</strong></div>
+            <div><small>最后动作</small><strong id="rendererLastAction">—</strong></div>
+            <div><small>最后更新时间</small><strong id="rendererUpdated">—</strong></div>
+          </div>
+          <p class="renderer-warning" id="rendererWarning">Desktop 正在自动准备 Renderer，无需手动打开浏览器。</p>
+        </article>
+
+        <div class="home-lower">
+          <article class="panel quick-panel">
+            <div class="panel-title"><div><p>快速操作</p><h3>常用伴播控制</h3></div></div>
+            <div class="quick-grid">
+              <button class="quick-action start" id="startBroadcast"><i>▶</i><span><strong>开始伴播</strong><small>连接语音与麦克风</small></span></button>
+              <button class="quick-action stop" id="stopBroadcast"><i>■</i><span><strong>停止伴播</strong><small>安全结束本次会话</small></span></button>
+              <button class="quick-action" id="testFirstAction"><i>✦</i><span><strong>测试动作</strong><small>运行一个动作检查</small></span></button>
+              <button class="quick-action" data-page-link="assets"><i>▧</i><span><strong>打开素材库</strong><small>管理直播素材</small></span></button>
+            </div>
+          </article>
+          <article class="panel stats-panel">
+            <div class="panel-title"><div><p>本次运行</p><h3>运行统计</h3></div><span class="live-label">LIVE</span></div>
+            <div class="stats-list">
+              <div><span class="stat-icon">◷</span><span><small>今日运行时间</small><strong id="uptime">00:00:00</strong></span></div>
+              <div><span class="stat-icon">◉</span><span><small>识别次数</small><strong id="recognitionCount">0</strong></span></div>
+              <div><span class="stat-icon">✦</span><span><small>执行动作次数</small><strong id="actionCount">0</strong></span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-assistant">
+        <div class="assistant-layout">
+          <article class="voice-visual panel">
+            <div class="visual-top"><span class="status-pill"><i class="pulse-dot"></i><span id="asrStatusPill">等待启动</span></span><span id="asrProvider">语音服务</span></div>
+            <div class="wave-orb" id="waveOrb"><i></i><i></i><i></i><i></i><i></i></div>
+            <h2 id="listeningTitle">AI 伴播待命中</h2>
+            <p id="listeningHint">点击“开始伴播”，让 AI 开始聆听直播指令。</p>
+            <div class="assistant-controls">
+              <button class="button primary" id="assistantStart">开始伴播</button>
+              <button class="button subtle" id="assistantStop">停止</button>
+              <button class="button subtle" id="micTest">测试麦克风</button>
+            </div>
+            <p class="action-hint" id="assistantHint"></p>
+          </article>
+          <div class="assistant-side">
+            <article class="panel detail-panel">
+              <div class="panel-title"><div><p>设备状态</p><h3>语音识别</h3></div><span class="card-state" id="asrState"></span></div>
+              <div class="friendly-list">
+                <div><span>当前麦克风</span><strong id="assistantMic">自动选择</strong></div>
+                <div><span>语音识别</span><strong id="assistantAsr">未连接</strong></div>
+                <div><span>识别方式</span><strong id="assistantProvider">—</strong></div>
+              </div>
+            </article>
+            <article class="panel transcript-panel">
+              <div class="panel-title"><div><p>实时内容</p><h3>最近识别</h3></div></div>
+              <blockquote id="lastTranscript">尚未收到语音内容</blockquote>
+              <div class="last-response"><span>最近响应</span><strong id="lastResponse">等待指令</strong></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-actions">
+        <div class="content-toolbar">
+          <div><h2>让角色动起来</h2><p>浏览并测试已经配置好的直播动作。</p></div>
+          <button class="button subtle" id="refreshActions">↻ 刷新动作</button>
+        </div>
+        <div class="filter-row"><button class="filter active">全部动作</button><button class="filter">已启用</button><span id="actionSummary">正在载入动作...</span></div>
+        <div class="card-grid action-grid" id="actionGrid"></div>
+      </section>
+
+      <section class="page" id="page-assets">
+        <div class="content-toolbar">
+          <div><h2>你的直播素材</h2><p>集中管理图片、GIF、WebM 和场景素材。</p></div>
+          <label class="button primary upload-button">＋ 添加素材<input id="assetUpload" type="file" accept="image/*,.gif,.webm,video/webm"></label>
+        </div>
+        <div class="filter-row" id="assetFilters">
+          <button class="filter active" data-filter="ALL">全部</button><button class="filter" data-filter="IMAGE">图片</button>
+          <button class="filter" data-filter="GIF">GIF</button><button class="filter" data-filter="WEBM">WebM</button><button class="filter" data-filter="SCENE">场景</button>
+          <span id="assetSummary">正在载入素材...</span>
+        </div>
+        <div class="card-grid asset-grid" id="assetGrid"></div>
+      </section>
+
+      <section class="page" id="page-live-output">
+        <div class="content-toolbar">
+          <div><h2>直播输出窗口</h2><p>为直播伴侣提供干净的独立窗口画面，不包含主界面菜单和按钮。</p></div>
+          <span class="live-output-state closed" id="liveOutputState">未打开</span>
+        </div>
+
+        <div class="live-output-layout">
+          <article class="panel live-output-preview-card">
+            <div class="live-output-preview" id="liveOutputPreview">
+              <span>AI Live Renderer</span>
+              <small id="liveOutputPreviewSize">1080 × 1920</small>
+            </div>
+            <div class="live-output-actions">
+              <button class="button primary" id="openLiveOutput">打开直播输出窗口</button>
+              <button class="button subtle" id="closeLiveOutput">关闭直播输出窗口</button>
+              <button class="button subtle" id="testLiveOutput">测试直播画面</button>
+            </div>
+            <p class="live-output-hint" id="liveOutputHint">打开后，请在直播伴侣的“窗口”素材中选择 AI Live Renderer。</p>
+          </article>
+
+          <article class="panel live-output-settings">
+            <div class="panel-title"><div><p>输出设置</p><h3>画布与绿幕</h3></div></div>
+            <label class="live-field">
+              <span>画布模式</span>
+              <select id="liveCanvasMode">
+                <option value="PORTRAIT">竖屏 · 1080 × 1920</option>
+                <option value="LANDSCAPE">横屏 · 1920 × 1080</option>
+                <option value="CUSTOM">自定义</option>
+              </select>
+            </label>
+            <div class="live-field-pair">
+              <label class="live-field"><span>设计宽度</span><input id="liveCanvasWidth" type="number" min="320" max="7680"></label>
+              <label class="live-field"><span>设计高度</span><input id="liveCanvasHeight" type="number" min="320" max="7680"></label>
+            </div>
+            <div class="live-field-pair">
+              <label class="live-field"><span>窗口宽度</span><input id="livePreviewWidth" type="number" min="240" max="1920"></label>
+              <label class="live-field"><span>窗口高度</span><input id="livePreviewHeight" type="number" min="240" max="1080"></label>
+            </div>
+            <label class="live-field"><span>绿幕颜色</span><input id="liveChromaColor" type="text" value="#00FF00" maxlength="7"></label>
+            <label class="live-auto-open"><input id="liveAutoOpen" type="checkbox"> Desktop 启动后自动打开输出窗口</label>
+            <button class="button primary live-save" id="saveLiveOutput">保存输出设置</button>
+          </article>
+        </div>
+
+        <article class="panel companion-guide">
+          <div><p>直播伴侣接入</p><h3>如何添加到直播伴侣</h3></div>
+          <ol>
+            <li>先点击“打开直播输出窗口”。</li>
+            <li>在直播伴侣中选择“添加素材 → 窗口”。</li>
+            <li>选择 <strong>AI Live Renderer</strong>，不要选择 AI Live Edge。</li>
+            <li>关闭“显示鼠标”，再开启绿幕抠图，颜色设为 <strong>#00FF00</strong>。</li>
+            <li>将输出窗口铺满直播画布，并放在游戏或摄像头图层上方。</li>
+          </ol>
+          <p class="guide-note">相似度建议初始值 350～450，平滑度建议初始值 60～100；不同直播伴侣版本的范围可能不同。</p>
+        </article>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="settings-layout">
+          <div class="settings-menu">
+            <button class="active" data-settings="general">常规设置<span>›</span></button>
+            <button data-settings="connection">连接设置<span>›</span></button>
+            <button data-settings="advanced">高级设置<span>›</span></button>
+          </div>
+          <div class="settings-content">
+            <div class="settings-pane active" id="settings-general">
+              <div class="content-toolbar compact"><div><h2>常规设置</h2><p>调整 AI Live Edge 的日常使用偏好。</p></div></div>
+              <article class="settings-card">
+                <div class="setting-row"><div class="setting-icon">↗</div><div><strong>启动设置</strong><small>启动应用后自动准备本地伴播环境</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                <div class="setting-row agent-runtime-row">
+                  <div class="setting-icon">⌘</div>
+                  <div><strong>Agent 运行模式</strong><small id="agentRuntimeHint">正在读取运行模式</small></div>
+                  <div class="mode-choice agent-runtime-choice">
+                    <button data-agent-runtime-mode="DEVELOPMENT">开发模式</button>
+                    <button data-agent-runtime-mode="PRODUCTION">本地 Jar 模式</button>
+                  </div>
+                </div>
+                <div class="setting-row"><div class="setting-icon">⌁</div><div><strong>麦克风选择</strong><small id="settingsMic">跟随系统默认设备</small></div><button class="select-button">自动选择⌄</button></div>
+                <div class="setting-row"><div class="setting-icon">◐</div><div><strong>主题</strong><small>应用界面的显示外观</small></div><button class="select-button">深色⌄</button></div>
+                <div class="setting-row"><div class="setting-icon">♢</div><div><strong>通知</strong><small>重要状态变化时显示应用提醒</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+              </article>
+              <article class="settings-card connection-card">
+                <div><span class="card-state good"></span><div><strong>本地服务已连接</strong><small>所有数据均在本机处理并保存</small></div></div>
+                <span id="settingsVersion">—</span>
+              </article>
+            </div>
+            <div class="settings-pane" id="settings-connection">
+              <div class="content-toolbar compact"><div><h2>连接设置</h2><p>选择本地 Agent 或 AI Live Cloud，不影响页面操作方式。</p></div></div>
+              <article class="settings-card connection-settings">
+                <div class="connection-mode-field">
+                  <label>运行模式</label>
+                  <div class="mode-choice">
+                    <button class="active" data-form-mode="LOCAL">LOCAL</button>
+                    <button data-form-mode="CLOUD">CLOUD</button>
+                  </div>
+                </div>
+                <label class="input-row"><span>本地地址<small>个人主播、离线使用、低延迟</small></span><input id="localAddressInput" placeholder="由连接层提供"></label>
+                <label class="input-row"><span>云端地址<small>必须使用 HTTPS</small></span><input id="cloudAddressInput" placeholder="由连接层提供"></label>
+                <label class="input-row cloud-field"><span>设备 ID<small>用于识别当前直播设备</small></span><input id="deviceIdInput" placeholder="device_xxxx"></label>
+                <label class="input-row cloud-field"><span>Tenant ID<small>企业租户标识</small></span><input id="tenantIdInput" placeholder="tenant_xxxx"></label>
+                <label class="input-row cloud-field"><span>Token<small id="tokenHint">用于云端身份认证</small></span><input id="tokenInput" type="password" placeholder="输入访问 Token"></label>
+              </article>
+              <div class="settings-save-row"><span id="connectionSaveHint"></span><button class="button primary" id="saveConnection">保存并连接</button></div>
+            </div>
+            <div class="settings-pane" id="settings-advanced">
+              <div class="content-toolbar compact"><div><h2>高级设置</h2><p>面向开发和故障排查的高级工具。</p></div></div>
+              <article class="developer-card" id="developerGate">
+                <div class="developer-icon">&lt;/&gt;</div>
+                <h3>开发者模式</h3>
+                <p>查看底层运行数据、适配器状态和诊断信息。普通使用无需开启。</p>
+                <button class="button danger-outline" id="enableDeveloper">进入开发者模式</button>
+              </article>
+              <div class="developer-console" id="developerConsole">
+                <div class="console-toolbar"><div><span class="warning-dot">!</span><div><strong>开发者 Console</strong><small>此区域包含底层工程参数</small></div></div><button class="button subtle small" id="exitDeveloper">退出开发者模式</button></div>
+                <iframe id="developerFrame" title="AI Live Edge Developer Console"></iframe>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"><span id="toastIcon">✓</span><div><strong id="toastTitle">操作成功</strong><small id="toastMessage"></small></div></div>
+
+  <dialog id="bindDialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><p>素材关联</p><h3>绑定动作</h3></div><button value="cancel">×</button></div>
+      <p class="dialog-copy">为 <strong id="bindAssetName"></strong> 选择一个桌面快捷动作。</p>
+      <div class="bind-options" id="bindOptions"></div>
+      <div class="dialog-actions"><button class="button subtle" value="cancel">取消</button><button class="button primary" value="confirm" id="confirmBinding">保存绑定</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="previewDialog" class="preview-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><p>素材预览</p><h3 id="previewTitle">预览</h3></div><button value="cancel">×</button></div>
+      <div class="preview-stage" id="previewStage"></div>
+    </form>
+  </dialog>
+
+  <dialog id="modeSetupDialog" class="mode-setup-dialog">
+    <form method="dialog">
+      <div class="setup-brand"><div class="brand-mark"><span></span><span></span><span></span></div><strong>AI Live Edge</strong></div>
+      <h2>请选择运行方式</h2>
+      <p>你可以稍后在“设置 → 连接设置”中随时切换。</p>
+      <div class="setup-options">
+        <label class="setup-option active">
+          <input type="radio" name="setupMode" value="LOCAL" checked>
+          <i>⌂</i><span><strong>本地模式</strong><small>使用本机 AI Agent<br>适合个人主播</small></span><b>低延迟</b>
+        </label>
+        <label class="setup-option">
+          <input type="radio" name="setupMode" value="CLOUD">
+          <i>☁</i><span><strong>云端模式</strong><small>连接 AI Live Cloud<br>适合团队和企业</small></span><b>企业版</b>
+        </label>
+      </div>
+      <label class="remember-choice"><input id="rememberMode" type="checkbox" checked> 记住我的选择</label>
+      <button class="button primary setup-submit" id="confirmMode" value="none">继续</button>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

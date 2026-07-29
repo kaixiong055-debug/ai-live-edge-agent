@@ -1,6 +1,7 @@
 package cn.ai.live.edgeagent.assets;
 
 import cn.ai.live.edgeagent.action.ActionType;
+import cn.ai.live.edgeagent.config.AiLivePathResolver;
 import cn.ai.live.edgeagent.config.AiLiveProperties;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -18,8 +19,8 @@ public class AssetService {
     private static final Set<String> IMAGE_EXT = Set.of("png", "jpg", "jpeg", "webp");
     private final Path rootPath;
 
-    public AssetService(AiLiveProperties properties) {
-        this.rootPath = Path.of(properties.getAssets().getRootPath()).toAbsolutePath().normalize();
+    public AssetService(AiLiveProperties properties, AiLivePathResolver pathResolver) {
+        this.rootPath = pathResolver.resolve(properties.getAssets().getRootPath());
     }
 
     public AssetResolveResult resolve(String assetPath, ActionType actionType) {

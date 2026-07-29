@@ -1,6 +1,7 @@
 package cn.ai.live.edgeagent.asr;
 
 import cn.ai.live.edgeagent.audio.PcmAudioFrame;
+import cn.ai.live.edgeagent.config.AiLivePathResolver;
 import cn.ai.live.edgeagent.config.AiLiveProperties;
 import cn.ai.live.edgeagent.runtime.RuntimeEventRecorder;
 import jakarta.annotation.PreDestroy;
@@ -28,6 +29,7 @@ public class SherpaOnnxSpeechRecognitionProvider implements SpeechRecognitionPro
     private static final String NATIVE_JAR_NAME = "sherpa-onnx-native-lib-win-x64-v1.12.10.jar";
 
     private final AiLiveProperties properties;
+    private final AiLivePathResolver pathResolver;
     private final Pcm16ToFloatConverter converter;
     private final LocalAsrDiagnostics diagnostics;
     private final RuntimeEventRecorder recorder;
@@ -41,9 +43,11 @@ public class SherpaOnnxSpeechRecognitionProvider implements SpeechRecognitionPro
     private volatile String sessionId = UUID.randomUUID().toString();
     private volatile String lastPartial = "";
 
-    public SherpaOnnxSpeechRecognitionProvider(AiLiveProperties properties, Pcm16ToFloatConverter converter,
-                                               LocalAsrDiagnostics diagnostics, RuntimeEventRecorder recorder) {
+    public SherpaOnnxSpeechRecognitionProvider(AiLiveProperties properties, AiLivePathResolver pathResolver,
+                                               Pcm16ToFloatConverter converter, LocalAsrDiagnostics diagnostics,
+                                               RuntimeEventRecorder recorder) {
         this.properties = properties;
+        this.pathResolver = pathResolver;
         this.converter = converter;
         this.diagnostics = diagnostics;
         this.recorder = recorder;
@@ -137,8 +141,12 @@ public class SherpaOnnxSpeechRecognitionProvider implements SpeechRecognitionPro
 
     private Path controlledPath(String value) {
         try {
-            Path base = Path.of("").toAbsolutePath().normalize();
-            Path path = base.resolve(value).normalize();
+            Path configured = Path.of(value);
+            if (configured.isAbsolute()) {
+                return configured.normalize();
+            }
+            Path base = pathResolver.baseDirectory();
+            Path path = pathResolver.resolve(value);
             return path.startsWith(base) ? path : null;
         } catch (Exception ex) {
             return null;

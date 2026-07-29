@@ -249,3 +249,30 @@ java -jar target\ai-live-edge-agent-0.5.0-A-SNAPSHOT.jar
 - Sherpa-ONNX 保留为可选离线模式。
 - FunASR 保持关闭和 `UNAVAILABLE`，不实现服务器连接。
 - 本阶段不实现 Warudo、OBS、HTTP/Webhook、Composite、腾讯云热词、安装包、云端授权或支付。
+
+## Windows Desktop Shell 与安装程序
+
+Windows 用户入口现采用 `.NET 8 + WPF + Microsoft WebView2`。Desktop 只负责 Agent 生命周期和承载现有 Console，不复制 ASR、素材或动作业务 UI。
+
+```text
+AI Live Edge.exe
+→ 检查 /local-api/runtime
+→ 必要时使用安装目录内 Java 17 Runtime 后台启动 Agent
+→ 在 WebView2 内打开 /console/index.html
+```
+
+Desktop 不打开外部浏览器。OBS 仍使用：
+
+```text
+http://127.0.0.1:18081/renderer/index.html
+```
+
+构建入口：
+
+```powershell
+.\scripts\build-desktop.ps1
+.\scripts\assemble-windows-dist.ps1 -JavaRuntimePath ... -AgentJarPath ... -DesktopPublishPath ...
+.\scripts\build-installer.ps1 -IsccPath ...
+```
+
+详细说明见 [docs/windows-desktop-packaging.md](docs/windows-desktop-packaging.md)。

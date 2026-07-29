@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <DesktopVersion>0.1.0</DesktopVersion>
+    <Company>AI Live</Company>
+    <Product>AI Live Edge</Product>
+    <Copyright>Copyright © AI Live</Copyright>
+  </PropertyGroup>
+</Project>

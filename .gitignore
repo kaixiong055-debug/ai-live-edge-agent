@@ -28,3 +28,11 @@ ai-live-controller/
 
 # OS files
 .DS_Store
+
+# Windows Desktop build and installer output
+desktop/**/bin/
+desktop/**/obj/
+.build/
+dist/
+installer/Output/
+AI-Live-Edge-Setup.exe

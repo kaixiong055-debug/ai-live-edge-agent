@@ -1,5 +1,7 @@
 package cn.ai.live.edgeagent.integrations.vtubestudio;
 
+import cn.ai.live.edgeagent.config.AiLivePathResolver;
+import cn.ai.live.edgeagent.config.AiLiveProperties;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -10,7 +12,11 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class VTubeStudioTokenStore {
-    private final Path tokenFile = Path.of("data", "tokens", "vtube-studio.token");
+    private final Path tokenFile;
+
+    public VTubeStudioTokenStore(AiLiveProperties properties, AiLivePathResolver pathResolver) {
+        this.tokenFile = pathResolver.resolve(properties.getIntegrations().getVtubeStudio().getTokenPath());
+    }
 
     public Optional<String> load() {
         try {

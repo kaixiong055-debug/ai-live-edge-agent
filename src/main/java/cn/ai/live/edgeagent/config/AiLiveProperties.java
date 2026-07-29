@@ -19,6 +19,9 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "ai-live")
 public class AiLiveProperties {
 
+    /** 可写用户数据根目录。为空时保持开发模式，以当前工作目录为基准。 */
+    private String dataDir = "";
+
     @Valid
     private Audio audio = new Audio();
     @Valid
@@ -222,6 +225,8 @@ public class AiLiveProperties {
         private String apiVersion = "1.0";
         private String pluginName = "AI Live Edge Agent";
         private String pluginDeveloper = "AI Live";
+        /** VTube Studio Token 文件位置；Desktop 安装模式会传入用户 tokens 目录的绝对路径。 */
+        private String tokenPath = "data/tokens/vtube-studio.token";
         private boolean connectOnStartup = true;
         @Min(100)
         private long requestTimeoutMs = 5000;

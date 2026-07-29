@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>AI Live Edge</AssemblyName>
+    <RootNamespace>AiLiveEdge.Desktop</RootNamespace>
+    <Version>$(DesktopVersion)</Version>
+    <FileVersion>$(DesktopVersion).0</FileVersion>
+    <AssemblyVersion>$(DesktopVersion).0</AssemblyVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AgentJarSource>$(MSBuildThisFileDirectory)..\..\..\target\ai-live-edge-agent.jar</AgentJarSource>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="app\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(AgentJarSource)" Link="agent\ai-live-edge-agent.jar" Condition="Exists('$(AgentJarSource)')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\..\src\main\resources\commands.json" Link="resources\defaults\commands.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\..\data\assets\111.jpg" Link="resources\default-assets\111.jpg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="ValidateAgentJar" BeforeTargets="PrepareForBuild;Publish">
+    <Error Condition="!Exists('$(AgentJarSource)')"
+           Text="Agent JAR is missing: $(AgentJarSource). Run scripts\build-agent.ps1 first." />
+  </Target>
+
+  <Target Name="CreateAgentRuntimeDirectories" AfterTargets="Build;Publish">
+    <MakeDir Directories="$(TargetDir)agent\config;$(TargetDir)agent\assets" Condition="'$(TargetDir)' != ''" />
+    <MakeDir Directories="$(PublishDir)agent\config;$(PublishDir)agent\assets" Condition="'$(PublishDir)' != ''" />
+  </Target>
+</Project>

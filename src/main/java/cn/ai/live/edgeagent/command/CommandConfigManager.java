@@ -1,5 +1,6 @@
 package cn.ai.live.edgeagent.command;
 
+import cn.ai.live.edgeagent.config.AiLivePathResolver;
 import cn.ai.live.edgeagent.config.AiLiveProperties;
 import cn.ai.live.edgeagent.runtime.RuntimeEventRecorder;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class CommandConfigManager {
     private final ObjectMapper objectMapper;
     private final AiLiveProperties properties;
+    private final AiLivePathResolver pathResolver;
     private final CommandConfigValidator validator;
     private final RuntimeEventRecorder recorder;
     private final DefaultResourceLoader resourceLoader = new DefaultResourceLoader();
@@ -38,9 +40,11 @@ public class CommandConfigManager {
     private volatile CommandConfigSnapshot snapshot = new CommandConfigSnapshot(new CommandConfig(), "NOT_LOADED", null, null, 0);
 
     public CommandConfigManager(ObjectMapper objectMapper, AiLiveProperties properties,
-                                CommandConfigValidator validator, RuntimeEventRecorder recorder) {
+                                AiLivePathResolver pathResolver, CommandConfigValidator validator,
+                                RuntimeEventRecorder recorder) {
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.pathResolver = pathResolver;
         this.validator = validator;
         this.recorder = recorder;
     }
@@ -131,8 +135,12 @@ public class CommandConfigManager {
         if (value.startsWith("classpath:")) {
             throw new IllegalStateException("commands.json 热加载需要文件系统路径，请使用 commands.json 或绝对/相对路径");
         }
-        Path path = Path.of(value).toAbsolutePath().normalize();
+        Path path = pathResolver.resolve(value);
         if (!Files.exists(path)) {
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Resource resource = resourceLoader.getResource("classpath:commands.json");
             try (InputStream inputStream = resource.getInputStream()) {
                 Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);

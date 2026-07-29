@@ -3,6 +3,9 @@ server:
   port: 18081
 
 ai-live:
+  # Desktop 正式安装模式会传入 %LOCALAPPDATA%\AI Live Edge。
+  # 为空时保持原有开发模式，以当前工作目录为基准。
+  data-dir: ${AI_LIVE_DATA_DIR:}
   audio:
     device-name: ""
     auto-scan-interval-ms: 5000
@@ -71,6 +74,7 @@ ai-live:
       api-version: "1.0"
       plugin-name: "AI Live Edge Agent"
       plugin-developer: "AI Live"
+      token-path: data/tokens/vtube-studio.token
       connect-on-startup: true
       request-timeout-ms: 5000
       reconnect:
