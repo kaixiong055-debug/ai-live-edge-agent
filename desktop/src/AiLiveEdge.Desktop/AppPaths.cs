@@ -21,6 +21,10 @@ public static class AppPaths
     public static string AgentConnectionFile => Path.Combine(DesktopDataDirectory, "connection.json");
     public static string AgentRuntimeSettingsFile => Path.Combine(DesktopDataDirectory, "agent-runtime.json");
     public static string LiveOutputSettingsFile => Path.Combine(DesktopDataDirectory, "live-output.json");
+    public static string AppSettingsFile => Path.Combine(DesktopDataDirectory, "settings.json");
+    public static string CloudApiSettingsFile => Path.Combine(DesktopDataDirectory, "cloud-api.json");
+    public static string AgentDeviceIdentityFile => Path.Combine(DesktopDataDirectory, "device-identity.json");
+    public static string SecureSessionFile => Path.Combine(TokensDirectory, "agent-session.dpapi");
     public static string CommandConfigFile => Path.Combine(ConfigDirectory, "commands.json");
     public static string VTubeStudioTokenFile => Path.Combine(TokensDirectory, "vtube-studio.token");
 
@@ -35,6 +39,7 @@ public static class AppPaths
     public static string DefaultCommandConfigFile => Path.Combine(ResourcesDirectory, "defaults", "commands.json");
     public static string DefaultAssetsDirectory => Path.Combine(ResourcesDirectory, "default-assets");
     public static string VersionFile => Path.Combine(InstallDirectory, "version.json");
+    public static string DeploymentConfigFile => Path.Combine(InstallDirectory, "deployment.json");
 
     public static string SherpaNativeDirectory => Path.Combine(
         AgentDirectory, "resources", "runtime", "native", "windows-x86_64");

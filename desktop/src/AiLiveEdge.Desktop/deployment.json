@@ -1,0 +1,6 @@
+{
+  "deploymentMode": "SAAS",
+  "apiBaseUrl": "",
+  "allowServerEditing": false,
+  "allowedHosts": []
+}

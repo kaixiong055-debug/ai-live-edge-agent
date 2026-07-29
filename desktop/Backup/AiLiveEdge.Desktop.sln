@@ -1,0 +1,18 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiLiveEdge.Desktop", "src\AiLiveEdge.Desktop\AiLiveEdge.Desktop.csproj", "{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Debug|x64.ActiveCfg = Debug|x64
+		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Debug|x64.Build.0 = Debug|x64
+		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Release|x64.ActiveCfg = Release|x64
+		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal

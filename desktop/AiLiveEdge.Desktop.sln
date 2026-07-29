@@ -15,4 +15,10 @@ Global
 		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Release|x64.ActiveCfg = Release|x64
 		{9A3A6F58-6505-4C45-8D5E-20F9A5A72561}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9739CAB6-F4EB-40FA-9FF7-BB46418C5547}
+	EndGlobalSection
 EndGlobal

@@ -9,8 +9,22 @@ using AiLiveEdge.Desktop.AgentLaunch;
 using AiLiveEdge.Desktop.Connection;
 using AiLiveEdge.Desktop.LiveOutput;
 using AiLiveEdge.Desktop.Models;
+using AiLiveEdge.Desktop.Models.Auth;
 using AiLiveEdge.Desktop.Renderer;
+using AiLiveEdge.Desktop.Services.Auth;
+using AiLiveEdge.Desktop.Services.Deployment;
+using AiLiveEdge.Desktop.Services.Heartbeat;
+using AiLiveEdge.Desktop.Services.Http;
+using AiLiveEdge.Desktop.Services.Session;
+using AiLiveEdge.Desktop.Services.Settings;
+using AiLiveEdge.Desktop.Services.Startup;
+using AiLiveEdge.Desktop.Services.Tray;
+using AiLiveEdge.Desktop.Services.Versioning;
 using Microsoft.Web.WebView2.Core;
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfMessageBoxButton = System.Windows.MessageBoxButton;
+using WpfMessageBoxImage = System.Windows.MessageBoxImage;
+using WpfMessageBoxResult = System.Windows.MessageBoxResult;
 
 namespace AiLiveEdge.Desktop;
 
@@ -19,6 +33,15 @@ public partial class MainWindow : Window
     private readonly AgentHealthChecker _healthChecker;
     private readonly AgentProcessManager _processManager;
     private readonly AgentConnectionManager _connectionManager;
+    private readonly IAuthService _authService;
+    private readonly ISessionService _sessionService;
+    private readonly IAgentHeartbeatService _heartbeatService;
+    private readonly ICloudApiSettingsService _cloudApiSettingsService;
+    private readonly IAppSettingsService _appSettingsService;
+    private readonly IWindowsStartupService _startupService;
+    private readonly ITrayIconService _trayIconService;
+    private readonly IAppVersionService _versionService;
+    private readonly IDeploymentConfigurationService _deploymentConfigurationService;
     private readonly IRendererManager _rendererManager;
     private readonly ILiveOutputWindowManager _liveOutputWindowManager;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
@@ -28,7 +51,10 @@ public partial class MainWindow : Window
     private bool _webViewInitialized;
     private bool _monitorRunning;
     private bool _allowClose;
+    private bool _isExplicitExit;
+    private bool _isShuttingDown;
     private bool _closeDialogOpen;
+    private bool _trayBroadcastRunning;
     private string? _lastLoggedAsrStatus;
     private string? _lastLoggedRecognition;
     private string? _lastLoggedAsrError;
@@ -36,14 +62,46 @@ public partial class MainWindow : Window
     public MainWindow(
         AgentHealthChecker healthChecker,
         AgentProcessManager processManager,
-        AgentConnectionManager connectionManager)
+        AgentConnectionManager connectionManager,
+        IAuthService authService,
+        ISessionService sessionService,
+        IAgentHeartbeatService heartbeatService,
+        ICloudApiSettingsService cloudApiSettingsService,
+        IAppSettingsService appSettingsService,
+        IWindowsStartupService startupService,
+        ITrayIconService trayIconService,
+        IAppVersionService versionService,
+        IDeploymentConfigurationService deploymentConfigurationService)
     {
         _healthChecker = healthChecker;
         _processManager = processManager;
         _connectionManager = connectionManager;
+        _authService = authService;
+        _sessionService = sessionService;
+        _heartbeatService = heartbeatService;
+        _cloudApiSettingsService = cloudApiSettingsService;
+        _appSettingsService = appSettingsService;
+        _startupService = startupService;
+        _trayIconService = trayIconService;
+        _versionService = versionService;
+        _deploymentConfigurationService = deploymentConfigurationService;
         InitializeComponent();
         _rendererManager = new RendererManager(RendererWebView);
         _liveOutputWindowManager = new LiveOutputWindowManager(this);
+        _sessionService.SessionExpired += SessionService_SessionExpired;
+        _trayIconService.Initialize(new TrayCallbacks(
+            () => Dispatcher.InvokeAsync(() =>
+            {
+                ActivateExistingWindow();
+                return Task.CompletedTask;
+            }).Task.Unwrap(),
+            () => Dispatcher.InvokeAsync(ToggleBroadcastFromTray).Task.Unwrap(),
+            () => Dispatcher.InvokeAsync(async () =>
+            {
+                await Logout(confirm: true);
+                PostAuthState();
+            }).Task.Unwrap(),
+            () => Dispatcher.InvokeAsync(ExitApplicationFromTrayAsync).Task.Unwrap()));
 
         _healthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _healthTimer.Tick += HealthTimer_Tick;
@@ -54,6 +112,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.InvokeAsync(() =>
         {
+            ShowInTaskbar = true;
             if (!IsVisible)
             {
                 Show();
@@ -89,44 +148,20 @@ public partial class MainWindow : Window
 
         try
         {
-            if (_connectionManager.CurrentMode == AgentConnectionMode.Local)
-            {
-                var progress = new Progress<string>(message =>
-                {
-                    DesktopLogger.Info(message);
-                    StatusMessage.Text = "正在准备本地服务，请稍候。";
-                });
-
-                ShowStarting("正在准备伴播环境", "正在检查本地 AI 服务，请稍候。");
-                var result = await _processManager.EnsureAgentRunningAsync(progress, _lifetimeCancellation.Token);
-                if (!result.IsSuccess)
-                {
-                    if (result.Status == AgentStartStatus.DevelopmentAgentUnavailable)
-                    {
-                        DesktopLogger.Info(result.Message);
-                        await EnsureWebViewAsync();
-                        ShowConsole();
-                        _healthTimer.Start();
-                        return;
-                    }
-                    ShowAgentError(result);
-                    return;
-                }
-                ConnectionText.Text = $"本地模式 · Agent {result.AgentVersion ?? "未知版本"}";
-            }
-            else
-            {
-                ConnectionText.Text = "云端模式";
-            }
-            ShowStarting("正在打开 AI Live Edge", "正在载入安全的桌面应用界面。");
+            await _cloudApiSettingsService.LoadAsync(_lifetimeCancellation.Token);
+            ShowStarting("正在打开 AI Live Edge", "正在载入安全桌面应用界面。");
             await EnsureWebViewAsync();
-            await EnsureRendererAsync();
-            if (_liveOutputWindowManager.CurrentStatus.Settings.AutoOpenLiveOutput)
-            {
-                await _liveOutputWindowManager.OpenAsync(_lifetimeCancellation.Token);
-            }
             ShowConsole();
-            _healthTimer.Start();
+
+            var restored = await _authService.RestoreSessionAsync(_lifetimeCancellation.Token);
+            if (restored is null)
+            {
+                PostAuthState("请登录 AI Live Cloud。");
+                return;
+            }
+
+            await StartAuthenticatedServicesAsync();
+            PostAuthState();
         }
         catch (OperationCanceledException)
         {
@@ -147,6 +182,58 @@ public partial class MainWindow : Window
         {
             _initializeLock.Release();
         }
+    }
+
+    private async Task StartAuthenticatedServicesAsync()
+    {
+        if (_connectionManager.CurrentMode == AgentConnectionMode.Local)
+        {
+            var progress = new Progress<string>(message =>
+            {
+                DesktopLogger.Info(message);
+                StatusMessage.Text = "正在准备本地服务，请稍候。";
+            });
+
+            ShowStarting("正在准备伴播环境", "正在检查本地 AI 服务，请稍候。");
+            var result = await _processManager.EnsureAgentRunningAsync(progress, _lifetimeCancellation.Token);
+            if (!result.IsSuccess)
+            {
+                if (result.Status == AgentStartStatus.DevelopmentAgentUnavailable)
+                {
+                    DesktopLogger.Info(result.Message);
+                    _healthTimer.Start();
+                    return;
+                }
+                ShowAgentError(result);
+                return;
+            }
+            ConnectionText.Text = $"本地模式 · Agent {result.AgentVersion ?? "未知版本"}";
+            if (_appSettingsService.Current.RendererAutoStart)
+            {
+                await EnsureRendererAsync();
+            }
+            if (_liveOutputWindowManager.CurrentStatus.Settings.AutoOpenLiveOutput)
+            {
+                await _liveOutputWindowManager.OpenAsync(_lifetimeCancellation.Token);
+            }
+            _healthTimer.Start();
+        }
+        else
+        {
+            ConnectionText.Text = "云端模式";
+        }
+
+        _heartbeatService.Start(CreateHeartbeatPayload);
+        ShowConsole();
+    }
+
+    private async Task<HeartbeatStatusPayload> CreateHeartbeatPayload()
+    {
+        var renderer = _rendererManager.CurrentStatus;
+        return await Task.FromResult(new HeartbeatStatusPayload(
+            renderer.State.ToString(),
+            renderer.ConnectionCount > 0 ? "CONNECTED" : "DISCONNECTED",
+            _connectionManager.CurrentMode.ToString().ToUpperInvariant()));
     }
 
     private async Task EnsureWebViewAsync()
@@ -245,6 +332,16 @@ public partial class MainWindow : Window
             }
             var data = await ExecuteBridgeOperation(operation, payload);
             LogAsrOperation(operation, data);
+            if (operation == "startAsr")
+            {
+                _trayBroadcastRunning = true;
+                UpdateTrayState();
+            }
+            else if (operation == "stopAsr")
+            {
+                _trayBroadcastRunning = false;
+                UpdateTrayState();
+            }
 
             if (operation == "configureConnection"
                 && _connectionManager.CurrentMode == AgentConnectionMode.Local)
@@ -277,8 +374,28 @@ public partial class MainWindow : Window
 
     private async Task<JsonElement> ExecuteBridgeOperation(string operation, JsonElement payload)
     {
+        if (!IsAuthOperation(operation) && _sessionService.Current is null)
+        {
+            throw new UnauthorizedAccessException("请先登录 AI Live Cloud。");
+        }
+
         return operation switch
         {
+            "getAuthState" => SerializeAuthState(),
+            "getAppSettings" => SerializeAppSettings(),
+            "updateAppSettings" => await UpdateAppSettings(payload),
+            "getAppInfo" => await SerializeAppInfo(),
+            "openLogsDirectory" => OpenLogsDirectory(),
+            "getRecentErrors" => SerializeRecentErrors(),
+            "cleanupExpiredLogs" => CleanupExpiredLogs(),
+            "exitApplication" => await ExitApplicationFromWebAsync(),
+            "getCloudApiSettings" => SerializeCloudApiSettings(),
+            "saveCloudApiSettings" => await SaveCloudApiSettings(payload),
+            "login" => await Login(payload),
+            "logout" => await Logout(),
+            "refreshCurrentLicense" => SerializeLicense(
+                await _authService.LoadCurrentLicenseAsync(_lifetimeCancellation.Token)),
+            "canStartBroadcast" => await SerializeBroadcastGate(),
             "getRendererStatus" => await GetRendererStatusJson(),
             "getAgentRuntimeMode" => SerializeAgentRuntimeMode(),
             "setAgentRuntimeMode" => await SetAgentRuntimeMode(payload),
@@ -296,6 +413,196 @@ public partial class MainWindow : Window
                 payload,
                 _lifetimeCancellation.Token)
         };
+    }
+
+    private static bool IsAuthOperation(string operation) =>
+        operation is "getAuthState" or "getCloudApiSettings" or "saveCloudApiSettings" or "login" or "logout"
+            or "getAppSettings" or "updateAppSettings" or "getAppInfo" or "openLogsDirectory"
+            or "getRecentErrors" or "cleanupExpiredLogs" or "exitApplication";
+
+    private async Task<JsonElement> Login(JsonElement payload)
+    {
+        if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("baseUrl", out _))
+        {
+            throw new InvalidOperationException("登录消息不接受云服务地址。");
+        }
+
+        var session = await _authService.LoginAsync(
+            new LoginRequest(
+                ReadRequiredString(payload, "username"),
+                ReadRequiredString(payload, "password"),
+                ReadOptionalBoolean(payload, "rememberLogin")
+                ?? ReadOptionalBoolean(payload, "remember")
+                ?? true),
+            _lifetimeCancellation.Token);
+        await _authService.LoadCurrentLicenseAsync(_lifetimeCancellation.Token);
+        await StartAuthenticatedServicesAsync();
+        return SerializeAuthState(session);
+    }
+
+    private async Task<JsonElement> Logout(bool confirm = true)
+    {
+        if (confirm)
+        {
+            var confirmed = WpfMessageBox.Show(
+                "确认退出登录吗？本地设备标识和普通设置会保留。",
+                "AI Live Edge",
+                WpfMessageBoxButton.YesNo,
+                WpfMessageBoxImage.Warning);
+            if (confirmed != WpfMessageBoxResult.Yes)
+            {
+                return SerializeAuthState();
+            }
+        }
+
+        await _heartbeatService.StopAsync(_lifetimeCancellation.Token);
+        _healthTimer.Stop();
+        await _authService.LogoutAsync(_lifetimeCancellation.Token);
+        UpdateTrayState();
+        return SerializeAuthState("已退出登录。");
+    }
+
+    private async Task<JsonElement> SaveCloudApiSettings(JsonElement payload)
+    {
+        if (!_deploymentConfigurationService.Current.AllowServerEditing)
+        {
+            throw new InvalidOperationException("当前部署模式不允许修改云服务地址。");
+        }
+
+        var baseUrl = ReadRequiredString(payload, "baseUrl");
+        if (_sessionService.Current is not null)
+        {
+            var confirmed = WpfMessageBox.Show(
+                "修改云端 App API 地址会退出当前账号，并停止当前云端心跳。是否继续？",
+                "AI Live Edge",
+                WpfMessageBoxButton.YesNo,
+                WpfMessageBoxImage.Warning);
+            if (confirmed != WpfMessageBoxResult.Yes)
+            {
+                return SerializeCloudApiSettings();
+            }
+
+            await _heartbeatService.StopAsync(_lifetimeCancellation.Token);
+            _healthTimer.Stop();
+            await _authService.LogoutAsync(_lifetimeCancellation.Token);
+        }
+
+        var settings = await _cloudApiSettingsService.SaveAsync(baseUrl, _lifetimeCancellation.Token);
+        PostAuthState(_sessionService.Current is null ? "请登录 AI Live Cloud。" : null);
+        UpdateTrayState();
+        return SerializeCloudApiSettings(settings);
+    }
+
+    private JsonElement SerializeAppSettings()
+    {
+        var settings = _appSettingsService.Current;
+        return JsonSerializer.SerializeToElement(new
+        {
+            settingsVersion = settings.SettingsVersion,
+            cloudApiBaseUrl = settings.CloudApiBaseUrl,
+            deploymentMode = _deploymentConfigurationService.Current.DeploymentMode.ToString(),
+            allowServerEditing = _deploymentConfigurationService.Current.AllowServerEditing,
+            heartbeatIntervalSeconds = settings.HeartbeatIntervalSeconds,
+            closeBehavior = settings.CloseBehavior == AppCloseBehavior.ExitApplication
+                ? "EXIT_APPLICATION"
+                : "MINIMIZE_TO_TRAY",
+            startWithWindows = _startupService.IsEnabled(),
+            startMinimized = settings.StartMinimized,
+            minimizeToTray = settings.MinimizeToTray,
+            showTrayNotification = settings.ShowTrayNotification,
+            logRetentionDays = settings.LogRetentionDays,
+            rendererAutoStart = settings.RendererAutoStart,
+            lastSelectedPage = settings.LastSelectedPage
+        });
+    }
+
+    private async Task<JsonElement> UpdateAppSettings(JsonElement payload)
+    {
+        var next = _appSettingsService.Current;
+        var startWithWindows = ReadOptionalBoolean(payload, "startWithWindows");
+        if (startWithWindows.HasValue)
+        {
+            _startupService.SetEnabled(startWithWindows.Value);
+            next = next with { StartWithWindows = startWithWindows.Value };
+        }
+
+        var closeBehavior = ReadOptionalString(payload, "closeBehavior");
+        if (!string.IsNullOrWhiteSpace(closeBehavior))
+        {
+            next = next with
+            {
+                CloseBehavior = string.Equals(closeBehavior, "EXIT_APPLICATION", StringComparison.OrdinalIgnoreCase)
+                    ? AppCloseBehavior.ExitApplication
+                    : AppCloseBehavior.MinimizeToTray
+            };
+        }
+
+        next = next with
+        {
+            StartMinimized = ReadOptionalBoolean(payload, "startMinimized") ?? next.StartMinimized,
+            MinimizeToTray = ReadOptionalBoolean(payload, "minimizeToTray") ?? next.MinimizeToTray,
+            ShowTrayNotification = ReadOptionalBoolean(payload, "showTrayNotification") ?? next.ShowTrayNotification,
+            RendererAutoStart = ReadOptionalBoolean(payload, "rendererAutoStart") ?? next.RendererAutoStart,
+            HeartbeatIntervalSeconds = ReadOptionalInt(payload, "heartbeatIntervalSeconds")
+                                       ?? next.HeartbeatIntervalSeconds,
+            LogRetentionDays = ReadOptionalInt(payload, "logRetentionDays") ?? next.LogRetentionDays,
+            LastSelectedPage = ReadOptionalString(payload, "lastSelectedPage") ?? next.LastSelectedPage
+        };
+
+        await _appSettingsService.SaveAsync(next, _lifetimeCancellation.Token);
+        DesktopLogger.CleanupExpiredLogs(next.LogRetentionDays);
+        return SerializeAppSettings();
+    }
+
+    private async Task<JsonElement> SerializeAppInfo()
+    {
+        var device = _sessionService.Current?.Device?.DeviceCode;
+        return await Task.FromResult(JsonSerializer.SerializeToElement(new
+        {
+            productName = _versionService.ProductName,
+            version = _versionService.Version,
+            displayVersion = ToDisplayVersion(_versionService.Version),
+            installDirectory = AppPaths.InstallDirectory,
+            dataDirectory = AppPaths.DataDirectory,
+            logsDirectory = AppPaths.LogsDirectory,
+            deviceCode = MaskDeviceCode(device),
+            account = _sessionService.Current?.User?.Username,
+            tenant = _sessionService.Current?.Tenant?.Name
+        }));
+    }
+
+    private JsonElement OpenLogsDirectory()
+    {
+        OpenLogsDirectoryCore();
+        return JsonSerializer.SerializeToElement(new { opened = true });
+    }
+
+    private JsonElement SerializeRecentErrors() =>
+        JsonSerializer.SerializeToElement(new
+        {
+            errors = DesktopLogger.ReadRecentErrors(10)
+        });
+
+    private JsonElement CleanupExpiredLogs()
+    {
+        DesktopLogger.CleanupExpiredLogs(_appSettingsService.Current.LogRetentionDays);
+        return JsonSerializer.SerializeToElement(new { cleaned = true });
+    }
+
+    private async Task<JsonElement> ExitApplicationFromWebAsync()
+    {
+        var confirmed = WpfMessageBox.Show(
+            "确认退出 AI Live Edge 吗？",
+            "AI Live Edge",
+            WpfMessageBoxButton.YesNo,
+            WpfMessageBoxImage.Warning);
+        if (confirmed != WpfMessageBoxResult.Yes)
+        {
+            return JsonSerializer.SerializeToElement(new { exiting = false });
+        }
+
+        await ExitApplicationFromTrayAsync();
+        return JsonSerializer.SerializeToElement(new { exiting = true });
     }
 
     private JsonElement SerializeAgentRuntimeMode(
@@ -322,7 +629,10 @@ public partial class MainWindow : Window
             cancellationToken: _lifetimeCancellation.Token);
         if (result.IsSuccess)
         {
-            await EnsureRendererAsync();
+            if (_appSettingsService.Current.RendererAutoStart)
+            {
+                await EnsureRendererAsync();
+            }
         }
         return SerializeAgentRuntimeMode(result.IsSuccess, result.Message);
     }
@@ -413,6 +723,10 @@ public partial class MainWindow : Window
             ? value.GetBoolean()
             : null;
 
+    private static string ReadRequiredString(JsonElement payload, string propertyName) =>
+        ReadOptionalString(payload, propertyName)
+        ?? throw new ArgumentException($"Missing required property: {propertyName}");
+
     private void LogAsrOperation(string operation, JsonElement data)
     {
         if (operation is "startAsr" or "stopAsr" or "getAsrStatus")
@@ -468,6 +782,188 @@ public partial class MainWindow : Window
     private void PostWebMessage(object message)
     {
         ConsoleWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message));
+    }
+
+    private void PostAuthState(string? message = null)
+    {
+        UpdateTrayState();
+        if (!_webViewInitialized || ConsoleWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+        PostWebMessage(new
+        {
+            type = "authStateChanged",
+            data = CreateAuthState(message)
+        });
+    }
+
+    private void UpdateTrayState()
+    {
+        var session = _sessionService.Current;
+        var licenseLabel = session?.License?.Status switch
+        {
+            1 => "授权有效",
+            2 => "授权暂停",
+            4 => "授权到期",
+            _ => session is null ? "未登录" : "授权异常"
+        };
+        _trayIconService.Update(new TrayState(
+            session is not null,
+            CanStartBroadcast(session),
+            _trayBroadcastRunning,
+            session is null
+                ? "未登录"
+                : $"{session.User?.Username ?? "已登录"} · {licenseLabel} · {_heartbeatService.CloudStatus}"));
+    }
+
+    private JsonElement SerializeAuthState(string? message = null)
+    {
+        UpdateTrayState();
+        return JsonSerializer.SerializeToElement(CreateAuthState(message));
+    }
+
+    private JsonElement SerializeAuthState(AuthSession? session, string? message = null)
+    {
+        UpdateTrayState();
+        return JsonSerializer.SerializeToElement(CreateAuthState(message, session));
+    }
+
+    private object CreateAuthState(string? message = null, AuthSession? session = null)
+    {
+        session ??= _sessionService.Current;
+        return new
+        {
+            authenticated = session is not null,
+            message,
+            cloudStatus = _heartbeatService.CloudStatus,
+            user = session?.User is null ? null : new
+            {
+                id = session.User.Id,
+                username = session.User.Username,
+                nickname = session.User.Nickname,
+                avatar = session.User.Avatar
+            },
+            tenant = session?.Tenant is null ? null : new
+            {
+                id = session.Tenant.Id,
+                name = session.Tenant.Name
+            },
+            device = session?.Device is null ? null : new
+            {
+                id = session.Device.Id,
+                deviceCode = session.Device.DeviceCode,
+                deviceName = session.Device.DeviceName,
+                status = session.Device.Status
+            },
+            license = CreateLicenseState(session?.License),
+            capabilities = session?.Capabilities is null ? null : new
+            {
+                agentRun = session.Capabilities.AgentRun,
+                configRead = session.Capabilities.ConfigRead,
+                platformManagedCredential = session.Capabilities.PlatformManagedCredential
+            },
+            canStartBroadcast = CanStartBroadcast(session),
+            startDisabledReason = StartDisabledReason(session)
+        };
+    }
+
+    private JsonElement SerializeCloudApiSettings(CloudApiSettings? settings = null)
+    {
+        settings ??= _cloudApiSettingsService.Current;
+        return JsonSerializer.SerializeToElement(new
+        {
+            baseUrl = settings.BaseUrl,
+            deploymentMode = _deploymentConfigurationService.Current.DeploymentMode.ToString(),
+            allowServerEditing = _deploymentConfigurationService.Current.AllowServerEditing,
+            timeoutSeconds = settings.TimeoutSeconds,
+            heartbeatIntervalSeconds = settings.HeartbeatIntervalSeconds
+        });
+    }
+
+    private JsonElement SerializeLicense(CurrentLicense? license) =>
+        JsonSerializer.SerializeToElement(CreateLicenseState(license));
+
+    private static object? CreateLicenseState(CurrentLicense? license) =>
+        license is null
+            ? null
+            : new
+            {
+                licenseType = license.LicenseType,
+                credentialMode = license.CredentialMode,
+                status = license.Status,
+                validFrom = license.ValidFrom,
+                validUntil = license.ValidUntil,
+                maxDeviceCount = license.MaxDeviceCount,
+                maxConcurrentAgentCount = license.MaxConcurrentAgentCount,
+                offlineGraceHours = license.OfflineGraceHours,
+                licenseTypeLabel = license.LicenseType switch
+                {
+                    1 => "永久买断",
+                    2 => "订阅授权",
+                    _ => "未知授权"
+                },
+                credentialModeLabel = license.CredentialMode switch
+                {
+                    1 => "客户自管",
+                    2 => "平台托管",
+                    _ => "未知模式"
+                },
+                statusLabel = license.Status switch
+                {
+                    0 => "未开通",
+                    1 => "正常授权",
+                    2 => "已暂停",
+                    3 => "已撤销",
+                    4 => "已到期",
+                    _ => "授权异常"
+                }
+            };
+
+    private async Task<JsonElement> SerializeBroadcastGate()
+    {
+        await _authService.RefreshCurrentSessionAsync(_lifetimeCancellation.Token);
+        return JsonSerializer.SerializeToElement(new
+        {
+            allowed = CanStartBroadcast(_sessionService.Current),
+            reason = StartDisabledReason(_sessionService.Current)
+        });
+    }
+
+    private static bool CanStartBroadcast(AuthSession? session) =>
+        session?.License?.IsUsable == true
+        && session.Capabilities?.AgentRun == true
+        && session.Device?.Status == 1
+        && session.AccessTokenExpiresAt > DateTimeOffset.UtcNow;
+
+    private static string? StartDisabledReason(AuthSession? session)
+    {
+        if (session is null) return "请先登录。";
+        if (session.AccessTokenExpiresAt <= DateTimeOffset.UtcNow) return "当前会话已失效。";
+        if (session.Device?.Status != 1) return "当前设备不可用。";
+        if (session.License?.IsUsable != true) return "AI 伴播授权当前不可用。";
+        if (session.Capabilities?.AgentRun != true) return "账号没有运行 Agent 的权限。";
+        return null;
+    }
+
+    private static string? MaskDeviceCode(string? deviceCode)
+    {
+        if (string.IsNullOrWhiteSpace(deviceCode))
+        {
+            return null;
+        }
+        return deviceCode.Length <= 8
+            ? "****"
+            : $"{deviceCode[..4]}****{deviceCode[^4..]}";
+    }
+
+    private static string ToDisplayVersion(string version)
+    {
+        var clean = version.Split('+', StringSplitOptions.RemoveEmptyEntries)[0];
+        var parts = clean.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 3
+            ? $"V{parts[0]}.{parts[1]}.{parts[2]}"
+            : $"V{clean}";
     }
 
     private async Task<JsonElement> GetRendererStatusJson()
@@ -709,6 +1205,11 @@ public partial class MainWindow : Window
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
+        OpenLogsDirectoryCore();
+    }
+
+    private void OpenLogsDirectoryCore()
+    {
         try
         {
             Directory.CreateDirectory(AppPaths.LogsDirectory);
@@ -723,15 +1224,71 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DesktopLogger.Error("Failed to open logs directory.", ex);
-            MessageBox.Show($"无法打开日志目录：{AppPaths.LogsDirectory}", "AI Live Edge",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBox.Show($"无法打开日志目录：{AppPaths.LogsDirectory}", "AI Live Edge",
+                WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
         }
+    }
+
+    public void HideToTray()
+    {
+        Hide();
+        ShowInTaskbar = false;
+        if (_appSettingsService.Current.ShowTrayNotification)
+        {
+            _trayIconService.ShowBackgroundNotificationOnce();
+        }
+    }
+
+    private async Task ExitApplicationFromTrayAsync()
+    {
+        _isExplicitExit = true;
+        _allowClose = true;
+        await ShutdownForExitAsync(stopManagedAgent: false);
+        Close();
+    }
+
+    private async Task ToggleBroadcastFromTray()
+    {
+        if (_sessionService.Current is null)
+        {
+            ActivateExistingWindow();
+            return;
+        }
+
+        var empty = JsonSerializer.SerializeToElement(new { });
+        var status = await _connectionManager.Execute("getAsrStatus", empty, _lifetimeCancellation.Token);
+        var currentStatus = ReadJsonString(status, "status") ?? ReadJsonString(status, "asrStatus");
+        var isRunning = currentStatus is "CONNECTED" or "RUNNING";
+        if (isRunning)
+        {
+            await _connectionManager.Execute("stopAsr", empty, _lifetimeCancellation.Token);
+        }
+        else
+        {
+            await _authService.RefreshCurrentSessionAsync(_lifetimeCancellation.Token);
+            if (!CanStartBroadcast(_sessionService.Current))
+            {
+                ActivateExistingWindow();
+                return;
+            }
+            await _connectionManager.Execute("startAsr", empty, _lifetimeCancellation.Token);
+        }
+        UpdateTrayState();
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_allowClose)
         {
+            return;
+        }
+
+        if (!_isExplicitExit
+            && _appSettingsService.Current.CloseBehavior == AppCloseBehavior.MinimizeToTray
+            && _appSettingsService.Current.MinimizeToTray)
+        {
+            e.Cancel = true;
+            HideToTray();
             return;
         }
 
@@ -764,7 +1321,7 @@ public partial class MainWindow : Window
                 }
             }
 
-            await _liveOutputWindowManager.ShutdownAsync(_lifetimeCancellation.Token);
+            await ShutdownForExitAsync(stopManagedAgent: false);
             _allowClose = true;
             Close();
         }
@@ -777,12 +1334,85 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         _healthTimer.Stop();
+        _trayIconService.Dispose();
+        _heartbeatService.Dispose();
+        _sessionService.SessionExpired -= SessionService_SessionExpired;
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _healthChecker.Dispose();
         _rendererManager.Dispose();
         _liveOutputWindowManager.Dispose();
         _connectionManager.Dispose();
+    }
+
+    private async Task ShutdownForExitAsync(bool stopManagedAgent)
+    {
+        if (_isShuttingDown)
+        {
+            return;
+        }
+
+        _isShuttingDown = true;
+        _trayIconService.DisableInteractions();
+        _healthTimer.Stop();
+        try
+        {
+            await _heartbeatService.StopAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            DesktopLogger.Error("Failed to stop heartbeat during shutdown.", ex);
+        }
+
+        try
+        {
+            _lifetimeCancellation.Cancel();
+        }
+        catch (Exception ex)
+        {
+            DesktopLogger.Error("Failed to cancel desktop lifetime token.", ex);
+        }
+
+        try
+        {
+            await _liveOutputWindowManager.ShutdownAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            DesktopLogger.Error("Failed to shutdown LiveOutput during shutdown.", ex);
+        }
+
+        if (stopManagedAgent)
+        {
+            try
+            {
+                await _processManager.StopManagedAgentAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                DesktopLogger.Error("Failed to stop managed Agent during shutdown.", ex);
+            }
+        }
+    }
+
+    private async void SessionService_SessionExpired(object? sender, string reason)
+    {
+        try
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                await _heartbeatService.StopAsync(_lifetimeCancellation.Token);
+                _healthTimer.Stop();
+                PostAuthState(reason);
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            DesktopLogger.Error("Session expired handler failed.", ex);
+        }
     }
 
     private void LoadDistributionVersion()

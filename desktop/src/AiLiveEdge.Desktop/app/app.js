@@ -15,7 +15,11 @@
     connection: null,
     agentRuntime: null,
     liveOutput: null,
-    lastAsrError: ""
+    lastAsrError: "",
+    auth: null,
+    appSettings: null,
+    pollersStarted: false,
+    pollers: []
   };
   const bridgeRequests = new Map();
 
@@ -50,6 +54,10 @@
 
   window.chrome?.webview?.addEventListener("message", (event) => {
     const message = event.data;
+    if (message.type === "authStateChanged") {
+      applyAuthState(message.data || {});
+      return;
+    }
     const request = bridgeRequests.get(message.id);
     if (!request) return;
     clearTimeout(request.timer);
@@ -75,6 +83,201 @@
     $("toast").classList.add("visible");
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => $("toast").classList.remove("visible"), 2800);
+  }
+
+  function showLogin(message = "") {
+    $("loginScreen").classList.remove("hidden");
+    document.querySelector(".app-shell").classList.add("auth-locked");
+    if (message) {
+      $("loginAlert").textContent = message;
+      $("loginAlert").classList.add("visible");
+    }
+  }
+
+  function showApp() {
+    $("loginScreen").classList.add("hidden");
+    document.querySelector(".app-shell").classList.remove("auth-locked");
+  }
+
+  function applyAuthState(auth) {
+    state.auth = auth;
+    if (!auth.authenticated) {
+      stopProtectedPolling();
+      showLogin(auth.message || "");
+      $("loginNetwork").textContent = auth.message || "等待登录";
+      if ($("cloudServiceStatus")) $("cloudServiceStatus").textContent = auth.message || "未登录";
+      return;
+    }
+
+    showApp();
+    const user = auth.user || {};
+    const tenant = auth.tenant || {};
+    const license = auth.license || {};
+    const cloudLabel = {
+      CONNECTED: "云端在线",
+      CONNECTING: "云端连接中",
+      SESSION_EXPIRED: "会话失效",
+      ERROR: "网络异常",
+      DISCONNECTED: "云端离线"
+    }[auth.cloudStatus] || "云端状态未知";
+    $("identityName").textContent = user.nickname || user.username || "AI 伴播用户";
+    $("authStatus").textContent = `${tenant.name || "当前租户"} · ${license.statusLabel || "授权状态未知"} · ${cloudLabel}`;
+    if ($("cloudServiceStatus")) $("cloudServiceStatus").textContent = `${cloudLabel} · ${license.statusLabel || "授权状态未知"}`;
+    $("loginPassword").value = "";
+    $("loginAlert").classList.remove("visible");
+    startProtectedPolling();
+  }
+
+  async function initializeAuth() {
+    document.querySelector(".app-shell").classList.add("auth-locked");
+    try {
+      const settings = await agent("getCloudApiSettings");
+      updateCloudLoginStatus(settings);
+      await initializeAppSettings();
+      const auth = await agent("getAuthState");
+      applyAuthState(auth);
+      if (auth.authenticated) {
+        await initializeConnection();
+      }
+    } catch (error) {
+      showLogin(error.message);
+      $("loginNetwork").textContent = error.message?.includes("未配置")
+        ? "云服务未配置"
+        : "云服务暂时无法连接，请检查网络后重试";
+    }
+  }
+
+  async function submitLogin() {
+    const username = $("loginUsername").value.trim();
+    const password = $("loginPassword").value;
+    if (!username) return showLogin("账号不能为空。");
+    if (!password) return showLogin("密码不能为空。");
+
+    $("loginSubmit").disabled = true;
+    $("loginSubmit").textContent = "登录中...";
+    $("loginNetwork").textContent = "正在连接云端服务";
+    $("loginAlert").classList.remove("visible");
+    try {
+      const auth = await agent("login", {
+        username,
+        password,
+        rememberLogin: $("rememberLogin").checked
+      });
+      applyAuthState(auth);
+      await initializeConnection();
+      toast("登录成功", auth.tenant?.name || "");
+    } catch (error) {
+      showLogin(error.message || "登录失败，请稍后重试。");
+      $("loginNetwork").textContent = error.message?.includes("超时")
+        ? "连接云端服务超时，请检查网络或服务器地址。"
+        : "登录失败";
+    } finally {
+      $("loginSubmit").disabled = false;
+      $("loginSubmit").textContent = "登录";
+    }
+  }
+
+  async function initializeAppSettings() {
+    const settings = await agent("getAppSettings");
+    applyAppSettings(settings);
+    await Promise.allSettled([refreshAppInfo(), refreshRecentErrors()]);
+  }
+
+  function applyAppSettings(settings) {
+    state.appSettings = settings;
+    if ($("cloudApiBaseUrlInput")) $("cloudApiBaseUrlInput").value = settings.cloudApiBaseUrl || "";
+    if ($("serverEditingPanel")) $("serverEditingPanel").style.display = settings.allowServerEditing ? "" : "none";
+    if ($("settingStartWithWindows")) $("settingStartWithWindows").checked = Boolean(settings.startWithWindows);
+    if ($("settingStartMinimized")) $("settingStartMinimized").checked = Boolean(settings.startMinimized);
+    if ($("settingCloseBehavior")) $("settingCloseBehavior").value = settings.closeBehavior || "MINIMIZE_TO_TRAY";
+    if ($("settingShowTrayNotification")) $("settingShowTrayNotification").checked = Boolean(settings.showTrayNotification);
+    if ($("settingRendererAutoStart")) $("settingRendererAutoStart").checked = Boolean(settings.rendererAutoStart);
+    if ($("settingLogRetentionDays")) $("settingLogRetentionDays").value = settings.logRetentionDays || 14;
+  }
+
+  async function saveAppSettings(patch) {
+    try {
+      const settings = await agent("updateAppSettings", patch);
+      applyAppSettings(settings);
+      toast("设置已保存");
+    } catch (error) {
+      toast("设置保存失败", error.message, true);
+    }
+  }
+
+  async function saveCloudApiBaseUrl() {
+    try {
+      const settings = await agent("saveCloudApiSettings", { baseUrl: $("cloudApiBaseUrlInput").value.trim() });
+      updateCloudLoginStatus(settings);
+      $("cloudApiBaseUrlInput").value = settings.baseUrl || "";
+      await initializeAppSettings();
+      toast("云端地址已更新", settings.baseUrl || "");
+    } catch (error) {
+      toast("云端地址保存失败", error.message, true);
+    }
+  }
+
+  async function refreshAppInfo() {
+    try {
+      const info = await agent("getAppInfo");
+      $("appInfoName").textContent = info.productName || "AI Live Edge";
+      $("appInfoVersion").textContent = `版本 ${info.version || "—"}`;
+      $("appInfoInstall").textContent = info.installDirectory || "—";
+      $("appInfoData").textContent = info.dataDirectory || "—";
+      $("logsDirectoryInfo").textContent = info.logsDirectory || "—";
+      $("appInfoDevice").textContent = info.deviceCode || "—";
+      $("appInfoAccount").textContent = [info.account, info.tenant].filter(Boolean).join(" · ") || "未登录";
+      $("desktopVersion").textContent = info.displayVersion || "V0.2.4";
+    } catch {
+      // App info is supportive; keep the settings page usable if it is unavailable.
+    }
+  }
+
+  async function refreshRecentErrors() {
+    try {
+      const result = await agent("getRecentErrors");
+      const errors = result.errors || [];
+      $("recentErrorsList").textContent = errors.length ? errors.join("  |  ") : "暂无错误摘要";
+    } catch {
+      $("recentErrorsList").textContent = "错误摘要读取失败";
+    }
+  }
+
+  function updateCloudLoginStatus(settings) {
+    const status = !settings?.baseUrl
+      ? "云服务未配置"
+      : settings.deploymentMode === "SAAS"
+        ? "云服务已就绪"
+        : "云服务已配置";
+    $("loginNetwork").textContent = status;
+    if ($("cloudServiceStatus")) $("cloudServiceStatus").textContent = status;
+  }
+
+  function startProtectedPolling() {
+    if (state.pollersStarted) return;
+    state.pollersStarted = true;
+    state.pollers = [
+      setInterval(refreshAuthState, 10000),
+      setInterval(refreshRuntime, 2000),
+      setInterval(refreshAsrStatus, 1000),
+      setInterval(refreshRendererStatus, 2000),
+      setInterval(refreshLiveOutputStatus, 2000),
+      setInterval(refreshCollections, 12000)
+    ];
+  }
+
+  function stopProtectedPolling() {
+    state.pollers.forEach((id) => clearInterval(id));
+    state.pollers = [];
+    state.pollersStarted = false;
+  }
+
+  async function refreshAuthState() {
+    try {
+      applyAuthState(await agent("getAuthState"));
+    } catch {
+      // Keep the existing auth banner until the desktop bridge reports a session change.
+    }
   }
 
   function friendlyAsr(status) {
@@ -157,7 +360,6 @@
     $("heroStatus").textContent = state.connected
       ? (isCloud ? "云端服务已连接" : "本地 Agent 已连接")
       : (isCloud ? "正在连接云端服务" : "正在连接本地 Agent");
-    $("authStatus").textContent = runtime.vTubeStudioAuthenticated ? "直播工具已授权" : "本地模式";
     $("aiStatus").textContent = asrConnected ? "正在聆听" : "等待指令";
     $("aiSubstatus").textContent = finalText ? `最近：${finalText}` : "随时准备响应";
     $("micStatus").textContent = micReady ? "已连接" : "未连接";
@@ -177,7 +379,7 @@
     $("lastResponse").textContent = currentAction.actionCode || runtime.lastActionType || "等待指令";
     $("settingsMic").textContent = runtime.microphoneDeviceName || "跟随系统默认设备";
 
-    const startDisabled = asrConnected || runtime.asrStatus === "CONNECTING";
+    const startDisabled = asrConnected || runtime.asrStatus === "CONNECTING" || state.auth?.canStartBroadcast === false;
     ["heroStart", "startBroadcast", "assistantStart"].forEach((id) => $(id).disabled = startDisabled);
     ["stopBroadcast", "assistantStop"].forEach((id) => $(id).disabled = !asrConnected && runtime.asrStatus !== "CONNECTING");
   }
@@ -214,6 +416,9 @@
     $("rendererBadge").className = `renderer-badge ${connected ? "connected" : connecting ? "connecting" : "failed"}`;
     $("rendererBadge").textContent = connected ? "已连接" : connecting ? "正在连接" : status.state === "FAILED" ? "连接失败" : "未连接";
     $("rendererConnection").textContent = connected ? "已连接" : connecting ? "连接中" : "未连接";
+    if ($("rendererSettingsStatus")) {
+      $("rendererSettingsStatus").textContent = connected ? "运行中" : connecting ? "启动中" : status.state === "FAILED" ? "启动失败" : "未启动";
+    }
     $("rendererWebSocket").textContent = connected ? `正常 · ${status.connectionCount || 1} 个连接` : "未建立";
     $("rendererLastAction").textContent = status.lastAction || "—";
     $("rendererUpdated").textContent = status.lastUpdatedAt
@@ -341,6 +546,13 @@
   }
 
   async function setBroadcast(start) {
+    if (start) {
+      const gate = await agent("canStartBroadcast");
+      if (!gate.allowed) {
+        toast("暂时不能开始伴播", gate.reason || "授权状态不可用", true);
+        return;
+      }
+    }
     const hint = $("assistantHint");
     hint.textContent = start ? "正在启动语音识别..." : "正在安全停止...";
     renderAsrPhase(start ? "CONNECTING" : "DISCONNECTING");
@@ -402,6 +614,7 @@
       CLOSED: "未打开"
     }[status.state] || "未打开";
     $("liveOutputState").textContent = stateLabel;
+    if ($("liveOutputSettingsStatus")) $("liveOutputSettingsStatus").textContent = stateLabel;
     $("liveOutputState").className = `live-output-state ${String(status.state || "CLOSED").toLowerCase()}`;
     $("liveCanvasMode").value = settings.canvasMode || "PORTRAIT";
     $("liveCanvasWidth").value = settings.canvasWidth || 1080;
@@ -567,11 +780,6 @@
       button.classList.toggle("active", button.dataset.formMode === settings.mode));
     $("localAddressInput").value = settings.localAddress || "";
     $("cloudAddressInput").value = settings.cloudAddress || "";
-    $("deviceIdInput").value = settings.deviceId || "";
-    $("tenantIdInput").value = settings.tenantId || "";
-    $("tokenInput").value = "";
-    $("tokenHint").textContent = settings.hasToken ? "已保存 Token；留空将继续使用" : "用于云端身份认证";
-    document.querySelectorAll(".cloud-field").forEach((field) => field.style.opacity = isCloud ? "1" : ".48");
   }
 
   function updateAgentRuntimeUi(runtime) {
@@ -621,10 +829,7 @@
         mode,
         remember,
         localAddress: $("localAddressInput").value.trim(),
-        cloudAddress: $("cloudAddressInput").value.trim(),
-        deviceId: $("deviceIdInput").value.trim(),
-        tenantId: $("tenantIdInput").value.trim(),
-        token: $("tokenInput").value.trim() || null
+        cloudAddress: $("cloudAddressInput").value.trim()
       });
       updateConnectionUi(settings);
       $("connectionSaveHint").textContent = `${settings.mode} 模式已保存`;
@@ -734,6 +939,23 @@
     const mode = document.querySelector("[data-form-mode].active")?.dataset.formMode || "LOCAL";
     configureConnection(mode).catch(() => {});
   };
+  $("saveCloudApiBaseUrl").onclick = saveCloudApiBaseUrl;
+  $("settingStartWithWindows").onchange = () => saveAppSettings({ startWithWindows: $("settingStartWithWindows").checked });
+  $("settingStartMinimized").onchange = () => saveAppSettings({ startMinimized: $("settingStartMinimized").checked });
+  $("settingCloseBehavior").onchange = () => saveAppSettings({ closeBehavior: $("settingCloseBehavior").value });
+  $("settingShowTrayNotification").onchange = () => saveAppSettings({ showTrayNotification: $("settingShowTrayNotification").checked });
+  $("settingRendererAutoStart").onchange = () => saveAppSettings({ rendererAutoStart: $("settingRendererAutoStart").checked });
+  $("settingLogRetentionDays").onchange = () => saveAppSettings({ logRetentionDays: Number($("settingLogRetentionDays").value || 14) });
+  $("openLogsButton").onclick = () => agent("openLogsDirectory").catch((error) => toast("无法打开日志目录", error.message, true));
+  $("cleanupLogsButton").onclick = async () => {
+    try {
+      await agent("cleanupExpiredLogs");
+      toast("过期日志已清理");
+    } catch (error) {
+      toast("日志清理失败", error.message, true);
+    }
+  };
+  $("refreshErrorsButton").onclick = refreshRecentErrors;
   $("confirmMode").onclick = async (event) => {
     event.preventDefault();
     const mode = document.querySelector('input[name="setupMode"]:checked')?.value || "LOCAL";
@@ -757,11 +979,43 @@
     $("developerGate").style.display = "";
     $("developerFrame").src = "";
   };
+  $("loginSubmit").onclick = submitLogin;
+  $("retryCloudStatus").onclick = async () => {
+    $("loginNetwork").textContent = "连接中";
+    try {
+      updateCloudLoginStatus(await agent("getCloudApiSettings"));
+      await refreshAppInfo();
+    } catch {
+      $("loginNetwork").textContent = "云服务暂时无法连接，请检查网络后重试";
+    }
+  };
+  $("loginPassword").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submitLogin();
+  });
+  $("loginUsername").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submitLogin();
+  });
+  $("togglePassword").onclick = () => {
+    const visible = $("loginPassword").type === "text";
+    $("loginPassword").type = visible ? "password" : "text";
+    $("togglePassword").textContent = visible ? "显示" : "隐藏";
+  };
+  $("identityMenuButton").onclick = () => {
+    document.querySelector(".identity-menu").classList.toggle("open");
+  };
+  $("accountInfo").onclick = () => {
+    const user = state.auth?.user || {};
+    const tenant = state.auth?.tenant || {};
+    toast(user.nickname || user.username || "账号信息", tenant.name || "");
+  };
+  $("logoutButton").onclick = async () => {
+    try {
+      const auth = await agent("logout");
+      applyAuthState(auth);
+    } catch (error) {
+      toast("退出登录失败", error.message, true);
+    }
+  };
 
-  initializeConnection();
-  setInterval(refreshRuntime, 2000);
-  setInterval(refreshAsrStatus, 1000);
-  setInterval(refreshRendererStatus, 2000);
-  setInterval(refreshLiveOutputStatus, 2000);
-  setInterval(refreshCollections, 12000);
+  initializeAuth();
 })();

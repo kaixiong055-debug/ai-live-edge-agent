@@ -4,8 +4,6 @@ namespace AiLiveEdge.Desktop.Connection;
 
 public sealed class CloudAgentClient : IAgentClient
 {
-    public static readonly Uri DefaultBaseAddress = new("https://api.xxx.com/");
-
     private readonly HttpClient _httpClient;
 
     public CloudAgentClient(
@@ -14,7 +12,8 @@ public sealed class CloudAgentClient : IAgentClient
         string? token,
         string? tenantId)
     {
-        BaseAddress = NormalizeBaseAddress(baseAddress ?? DefaultBaseAddress);
+        BaseAddress = NormalizeBaseAddress(baseAddress
+            ?? throw new ArgumentException("Cloud Agent address must be configured.", nameof(baseAddress)));
         DeviceId = deviceId?.Trim() ?? string.Empty;
         Token = token?.Trim() ?? string.Empty;
         TenantId = tenantId?.Trim() ?? string.Empty;

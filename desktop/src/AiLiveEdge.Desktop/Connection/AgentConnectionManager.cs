@@ -61,9 +61,9 @@ public sealed class AgentConnectionManager : IDisposable
                 HasSelectedMode = remember || _settings.HasSelectedMode,
                 LocalAddress = ReadOptionalString(payload, "localAddress") ?? _settings.LocalAddress,
                 CloudAddress = ReadOptionalString(payload, "cloudAddress") ?? _settings.CloudAddress,
-                DeviceId = ReadOptionalString(payload, "deviceId") ?? _settings.DeviceId,
-                TenantId = ReadOptionalString(payload, "tenantId") ?? _settings.TenantId,
-                Token = ReadOptionalString(payload, "token") ?? _settings.Token
+                DeviceId = string.Empty,
+                TenantId = string.Empty,
+                Token = string.Empty
             };
 
             var nextClient = CreateClient(next);
@@ -101,10 +101,7 @@ public sealed class AgentConnectionManager : IDisposable
         mode = _settings.Mode.ToString().ToUpperInvariant(),
         hasSelectedMode = _settings.HasSelectedMode,
         localAddress = _settings.LocalAddress,
-        cloudAddress = _settings.CloudAddress,
-        deviceId = _settings.DeviceId,
-        tenantId = _settings.TenantId,
-        hasToken = !string.IsNullOrWhiteSpace(_settings.Token)
+        cloudAddress = _settings.CloudAddress
     });
 
     private static IAgentClient CreateClient(AgentConnectionSettings settings)
@@ -130,7 +127,19 @@ public sealed class AgentConnectionManager : IDisposable
                     File.ReadAllText(AppPaths.AgentConnectionFile));
                 if (settings is not null)
                 {
-                    return settings;
+                    var cloudAddress = settings.CloudAddress;
+                    var mode = settings.Mode == AgentConnectionMode.Cloud && string.IsNullOrWhiteSpace(cloudAddress)
+                        ? AgentConnectionMode.Local
+                        : settings.Mode;
+                    return settings with
+                    {
+                        Mode = mode,
+                        HasSelectedMode = mode == settings.Mode && settings.HasSelectedMode,
+                        CloudAddress = cloudAddress,
+                        DeviceId = string.Empty,
+                        TenantId = string.Empty,
+                        Token = string.Empty
+                    };
                 }
             }
         }
@@ -197,7 +206,7 @@ public sealed class AgentConnectionManager : IDisposable
             AgentConnectionMode.Local,
             false,
             LocalAgentClient.DefaultBaseAddress.AbsoluteUri,
-            CloudAgentClient.DefaultBaseAddress.AbsoluteUri,
+            string.Empty,
             string.Empty,
             string.Empty,
             string.Empty);

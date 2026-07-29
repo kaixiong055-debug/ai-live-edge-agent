@@ -8,7 +8,28 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-logo"><img src="../src/Assets/Images/ai-live-logo.png" alt="AI 伴播"></div>
+        <div><strong>AI Live Edge</strong><small>云端 SaaS 认证</small></div>
+      </div>
+      <h1>登录 AI 伴播云平台</h1>
+      <p class="login-copy">登录后才能访问桌面伴播工作台、Renderer 控制和云端授权能力。</p>
+      <div class="login-alert" id="loginAlert"></div>
+      <label class="login-field"><span>账号</span><input id="loginUsername" autocomplete="username" placeholder="请输入账号"></label>
+      <label class="login-field password-field">
+        <span>密码</span>
+        <input id="loginPassword" autocomplete="current-password" type="password" placeholder="请输入密码">
+        <button id="togglePassword" type="button">显示</button>
+      </label>
+      <label class="remember-login"><input id="rememberLogin" type="checkbox" checked> 记住登录状态</label>
+      <button class="button primary login-submit" id="loginSubmit">登录</button>
+      <div class="login-foot"><span id="loginNetwork">等待连接云端服务</span><button id="retryCloudStatus" type="button">重试</button><span id="desktopVersion">V0.2.4</span></div>
+    </div>
+  </div>
+
+  <div class="app-shell auth-locked">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark"><span></span><span></span><span></span></div>
@@ -43,8 +64,17 @@
             <button id="headerCloudMode" data-switch-mode="CLOUD">云端模式</button>
           </div>
           <div class="identity">
-            <div class="avatar">AI</div>
-            <div><strong>本地用户</strong><small id="authStatus">授权状态检查中</small></div>
+            <div class="avatar">
+              <img src="../src/Assets/Images/ai-live-logo.png" alt="AI伴播">
+            </div>
+            <div><strong id="identityName">未登录</strong><small id="authStatus">等待登录</small></div>
+            <div class="identity-menu">
+              <button id="identityMenuButton" type="button">⋯</button>
+              <div class="identity-dropdown" id="identityDropdown">
+                <button id="accountInfo" type="button">账号信息</button>
+                <button id="logoutButton" type="button">退出登录</button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -243,6 +273,10 @@
               <div class="content-toolbar compact"><div><h2>常规设置</h2><p>调整 AI Live Edge 的日常使用偏好。</p></div></div>
               <article class="settings-card">
                 <div class="setting-row"><div class="setting-icon">↗</div><div><strong>启动设置</strong><small>启动应用后自动准备本地伴播环境</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                <div class="setting-row"><div class="setting-icon">⏻</div><div><strong>开机自动启动</strong><small>使用当前 Windows 用户启动项，不需要管理员权限</small></div><label class="switch"><input id="settingStartWithWindows" type="checkbox"><span></span></label></div>
+                <div class="setting-row"><div class="setting-icon">▁</div><div><strong>启动后最小化</strong><small>应用启动后直接进入系统托盘</small></div><label class="switch"><input id="settingStartMinimized" type="checkbox"><span></span></label></div>
+                <div class="setting-row"><div class="setting-icon">×</div><div><strong>关闭窗口行为</strong><small>关闭主窗口时最小化到托盘或退出程序</small></div><select id="settingCloseBehavior"><option value="MINIMIZE_TO_TRAY">最小化到托盘</option><option value="EXIT_APPLICATION">退出程序</option></select></div>
+                <div class="setting-row"><div class="setting-icon">•</div><div><strong>托盘提示</strong><small>首次最小化到托盘时显示后台运行提示</small></div><label class="switch"><input id="settingShowTrayNotification" type="checkbox"><span></span></label></div>
                 <div class="setting-row agent-runtime-row">
                   <div class="setting-icon">⌘</div>
                   <div><strong>Agent 运行模式</strong><small id="agentRuntimeHint">正在读取运行模式</small></div>
@@ -262,6 +296,10 @@
             </div>
             <div class="settings-pane" id="settings-connection">
               <div class="content-toolbar compact"><div><h2>连接设置</h2><p>选择本地 Agent 或 AI Live Cloud，不影响页面操作方式。</p></div></div>
+              <article class="settings-card connection-settings" id="serverEditingPanel" style="display:none">
+                <label class="input-row"><span>App API 地址<small>请填写完整 App API 根地址，例如 https://example.com/app-api/ 或 http://127.0.0.1:48080/app-api/</small></span><input id="cloudApiBaseUrlInput" placeholder="https://example.com/app-api/"></label>
+                <div class="setting-row"><div class="setting-icon">☁</div><div><strong>云端 SaaS 状态</strong><small id="cloudServiceStatus">等待登录</small></div><button class="select-button" id="saveCloudApiBaseUrl">修改地址</button></div>
+              </article>
               <article class="settings-card connection-settings">
                 <div class="connection-mode-field">
                   <label>运行模式</label>
@@ -272,14 +310,27 @@
                 </div>
                 <label class="input-row"><span>本地地址<small>个人主播、离线使用、低延迟</small></span><input id="localAddressInput" placeholder="由连接层提供"></label>
                 <label class="input-row"><span>云端地址<small>必须使用 HTTPS</small></span><input id="cloudAddressInput" placeholder="由连接层提供"></label>
-                <label class="input-row cloud-field"><span>设备 ID<small>用于识别当前直播设备</small></span><input id="deviceIdInput" placeholder="device_xxxx"></label>
-                <label class="input-row cloud-field"><span>Tenant ID<small>企业租户标识</small></span><input id="tenantIdInput" placeholder="tenant_xxxx"></label>
-                <label class="input-row cloud-field"><span>Token<small id="tokenHint">用于云端身份认证</small></span><input id="tokenInput" type="password" placeholder="输入访问 Token"></label>
               </article>
               <div class="settings-save-row"><span id="connectionSaveHint"></span><button class="button primary" id="saveConnection">保存并连接</button></div>
             </div>
             <div class="settings-pane" id="settings-advanced">
               <div class="content-toolbar compact"><div><h2>高级设置</h2><p>面向开发和故障排查的高级工具。</p></div></div>
+              <article class="settings-card">
+                <div class="setting-row"><div class="setting-icon">R</div><div><strong>Renderer 自动启动</strong><small id="rendererSettingsStatus">跟随当前登录生命周期</small></div><label class="switch"><input id="settingRendererAutoStart" type="checkbox"><span></span></label></div>
+                <div class="setting-row"><div class="setting-icon">O</div><div><strong>LiveOutput 状态</strong><small id="liveOutputSettingsStatus">等待状态</small></div><span id="rendererAddressInfo">本地 WebView Renderer</span></div>
+              </article>
+              <article class="settings-card">
+                <label class="input-row"><span>日志保留天数<small>默认 14 天，清理不会读取超大日志正文</small></span><input id="settingLogRetentionDays" type="number" min="1" max="365"></label>
+                <div class="setting-row"><div class="setting-icon">L</div><div><strong>日志目录</strong><small id="logsDirectoryInfo">本地日志目录</small></div><button class="select-button" id="openLogsButton">打开目录</button><button class="select-button" id="cleanupLogsButton">清理过期日志</button></div>
+                <div class="setting-row"><div class="setting-icon">!</div><div><strong>最近错误</strong><small id="recentErrorsList">暂无错误摘要</small></div><button class="select-button" id="refreshErrorsButton">刷新</button></div>
+              </article>
+              <article class="settings-card">
+                <div class="setting-row"><div class="setting-icon">i</div><div><strong id="appInfoName">AI Live Edge</strong><small id="appInfoVersion">版本读取中</small></div></div>
+                <div class="setting-row"><div class="setting-icon">P</div><div><strong>安装路径</strong><small id="appInfoInstall">—</small></div></div>
+                <div class="setting-row"><div class="setting-icon">D</div><div><strong>数据目录</strong><small id="appInfoData">—</small></div></div>
+                <div class="setting-row"><div class="setting-icon">#</div><div><strong>设备编码</strong><small id="appInfoDevice">—</small></div></div>
+                <div class="setting-row"><div class="setting-icon">U</div><div><strong>当前账号</strong><small id="appInfoAccount">—</small></div></div>
+              </article>
               <article class="developer-card" id="developerGate">
                 <div class="developer-icon">&lt;/&gt;</div>
                 <h3>开发者模式</h3>

@@ -5,6 +5,9 @@
 ```text
 D:\git-ai-live\ai-live-edge-agent
 ```
+执行命令
+cd D:\git-ai-live\ai-live-edge-agent\desktop
+dotnet run --project src\AiLiveEdge.Desktop\AiLiveEdge.Desktop.csproj
 
 当前默认模式是腾讯云实时 ASR。Sherpa-ONNX 本地离线识别保留为可选模式，FunASR 只保留配置和枚举，后续版本再实现。
 
