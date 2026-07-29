@@ -36,3 +36,5 @@ desktop/**/obj/
 dist/
 installer/Output/
 AI-Live-Edge-Setup.exe
+
+/scripts.zip
